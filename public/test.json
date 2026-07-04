@@ -1,0 +1,13 @@
+  {
+    "id": "1",
+    "name": "Эсеналиева Наргиза",
+    "groupName": "Группа A",
+    "currentTopic": "HTML & CSS",
+    "come":[
+        {
+            "date":"02.07.26",
+            "time_start":"10:30",
+            "time_finish":"11:00"
+        }
+    ]
+  }

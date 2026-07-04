@@ -1,0 +1,391 @@
+import { useState, useMemo } from 'react';
+import { BarChart2, Copy, FileText, Download, Check, ChevronDown } from 'lucide-react';
+import { clsx } from 'clsx';
+import { computePeriodStats, copyToClipboard, generateDailyReport, dateRange } from '../utils/analytics';
+import { fmtDMY, parseDMY, todayDMY } from '../utils/dates';
+import { DateBar } from './DateBar';
+import type { Student } from '../types';
+
+type Period = 'day' | 'week' | 'month' | 'custom';
+type StudentFilter = 'all' | 'visited' | 'absent';
+type StudentSort = 'visits' | 'name' | 'lastVisit';
+
+interface Props {
+  students: Student[];
+  mentorName?: string;
+}
+
+function getMondayOfWeek(d: Date): Date {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const m = new Date(d);
+  m.setDate(d.getDate() + diff);
+  m.setHours(0, 0, 0, 0);
+  return m;
+}
+
+function getWeekOptions() {
+  const opts = [];
+  const today = new Date();
+  for (let i = 0; i < 8; i++) {
+    const ref = new Date(today);
+    ref.setDate(today.getDate() - i * 7);
+    const mon = getMondayOfWeek(ref);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    const label = i === 0 ? 'Текущая неделя' : i === 1 ? 'Прошлая неделя' : `${i} недели назад`;
+    opts.push({ label, from: mon, to: sun });
+  }
+  return opts;
+}
+
+function getMonthOptions() {
+  const opts = [];
+  const today = new Date();
+  const RU_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  for (let i = 0; i < 6; i++) {
+    const ref = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const from = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    const to = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+    opts.push({ label: `${RU_MONTHS[ref.getMonth()]} ${ref.getFullYear()}`, from, to });
+  }
+  return opts;
+}
+
+function generatePeriodReport(students: Student[], dates: string[], label: string): string {
+  const dateSet = new Set(dates);
+  const visited = students
+    .map((s) => ({ student: s, entries: s.come.filter((e) => dateSet.has(e.date)) }))
+    .filter((x) => x.entries.length > 0)
+    .sort((a, b) => b.entries.length - a.entries.length);
+  const total = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
+  return [
+    `Мезгил: ${label}`,
+    `Жалпы студент: ${students.length}`,
+    `Жалпы келген: ${visited.length} уникалдуу студент`,
+    `Жалпы сабак: ${total} гибрид сабак`,
+    ``,
+    `Активдүү студенттер:`,
+    ...visited.map(({ student, entries }, i) =>
+      `${i + 1}. ${student.name} — ${entries.length} жолу (${entries.map((e) => e.time_start).join(', ')})`
+    ),
+  ].join('\n');
+}
+
+function exportCSV(students: Student[], dates: string[], filename: string) {
+  const dateSet = new Set(dates);
+  const rows = [['Имя', 'Тема', 'Посещений', 'Первый визит', 'Последний визит', 'Ср. длит. (мин)']];
+  for (const s of students) {
+    const entries = s.come.filter((e) => dateSet.has(e.date));
+    const sorted = [...entries].sort((a, b) => parseDMY(a.date).getTime() - parseDMY(b.date).getTime());
+    const durations = entries.map((e) => {
+      const [sh, sm] = e.time_start.split(':').map(Number);
+      const [fh, fm] = e.time_finish.split(':').map(Number);
+      const d = (fh * 60 + fm) - (sh * 60 + sm);
+      return d > 0 ? d : null;
+    }).filter((d): d is number => d !== null);
+    const avgDur = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : '';
+    rows.push([s.name, s.currentTopic, String(entries.length), sorted[0]?.date ?? '', sorted.at(-1)?.date ?? '', String(avgDur)]);
+  }
+  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function ReportsContent({ students, mentorName = 'Ментор' }: Props) {
+  const [period, setPeriod] = useState<Period>('day');
+  const [dayDate, setDayDate] = useState(todayDMY);
+  const [weekIdx, setWeekIdx] = useState(0);
+  const [monthIdx, setMonthIdx] = useState(0);
+  const [customFrom, setCustomFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return fmtDMY(d); });
+  const [customTo, setCustomTo] = useState(todayDMY);
+  const [studentFilter, setStudentFilter] = useState<StudentFilter>('all');
+  const [studentSort, setStudentSort] = useState<StudentSort>('visits');
+  const [copiedList, setCopiedList] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
+
+  const weekOptions = useMemo(getWeekOptions, []);
+  const monthOptions = useMemo(getMonthOptions, []);
+
+  const { dates, periodLabel } = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (period === 'day') return { dates: [dayDate], periodLabel: dayDate };
+    if (period === 'week') {
+      const opt = weekOptions[weekIdx];
+      const to = opt.to > today ? today : opt.to;
+      return { dates: dateRange(opt.from, to), periodLabel: `${fmtDMY(opt.from)} – ${fmtDMY(to)}` };
+    }
+    if (period === 'month') {
+      const opt = monthOptions[monthIdx];
+      const to = opt.to > today ? today : opt.to;
+      return { dates: dateRange(opt.from, to), periodLabel: opt.label };
+    }
+    try {
+      const f = parseDMY(customFrom), t = parseDMY(customTo);
+      if (f <= t) { const to = t > today ? today : t; return { dates: dateRange(f, to), periodLabel: `${customFrom} – ${customTo}` }; }
+    } catch { /* ignore */ }
+    return { dates: [], periodLabel: 'Период' };
+  }, [period, dayDate, weekIdx, monthIdx, customFrom, customTo, weekOptions, monthOptions]);
+
+  const stats = useMemo(() => computePeriodStats(students, dates), [students, dates]);
+
+  const filteredStudents = useMemo(() => {
+    let list = stats.studentStats;
+    if (studentFilter === 'visited') list = list.filter((s) => s.visitCount > 0);
+    if (studentFilter === 'absent') list = list.filter((s) => s.visitCount === 0);
+    return [...list].sort((a, b) => {
+      if (studentSort === 'name') return a.student.name.localeCompare(b.student.name, 'ru');
+      if (studentSort === 'lastVisit') {
+        if (!a.lastVisit && !b.lastVisit) return 0;
+        if (!a.lastVisit) return 1; if (!b.lastVisit) return -1;
+        return parseDMY(b.lastVisit).getTime() - parseDMY(a.lastVisit).getTime();
+      }
+      return b.visitCount - a.visitCount;
+    });
+  }, [stats, studentFilter, studentSort]);
+
+  const maxVisits = useMemo(() => Math.max(1, ...stats.studentStats.map((s) => s.visitCount)), [stats]);
+
+  const handleCopyList = async () => {
+    if (period === 'day') {
+      const present = students
+        .map((s) => ({ s, e: s.come.find((e) => e.date === dayDate) }))
+        .filter((x): x is { s: Student; e: NonNullable<typeof x.e> } => !!x.e)
+        .sort((a, b) => a.e.time_start.localeCompare(b.e.time_start));
+      const lines = present.length === 0
+        ? [`${dayDate} — никого не отмечено`]
+        : [`Дата: ${dayDate}`, `Присутствовали (${present.length}/${students.length}):`,
+           ...present.map(({ s, e }, i) => `${i + 1}. ${s.name} — ${e.time_start}–${e.time_finish} (${s.currentTopic})`)];
+      await copyToClipboard(lines.join('\n'));
+    } else {
+      const visited = stats.studentStats.filter((s) => s.visitCount > 0).sort((a, b) => b.visitCount - a.visitCount);
+      await copyToClipboard([`Период: ${periodLabel}`, `Посещений: ${stats.totalVisits}`,
+        `Студентов: ${visited.length}/${students.length}`, '',
+        ...visited.map((s, i) => `${i + 1}. ${s.student.name} — ${s.visitCount} раз`)].join('\n'));
+    }
+    setCopiedList(true); setTimeout(() => setCopiedList(false), 2000);
+  };
+
+  const handleCopyReport = async () => {
+    const text = period === 'day'
+      ? generateDailyReport(students, dayDate, mentorName)
+      : generatePeriodReport(students, dates, periodLabel);
+    await copyToClipboard(text);
+    setCopiedReport(true); setTimeout(() => setCopiedReport(false), 2000);
+  };
+
+  function dmyToInput(dmy: string) { try { const [d, m, y] = dmy.split('.'); return `20${y}-${m}-${d}`; } catch { return ''; } }
+  function inputToDmy(v: string) { try { const [y, m, d] = v.split('-'); return `${d}.${m}.${String(y).slice(-2)}`; } catch { return ''; } }
+
+  return (
+    <div className="flex flex-col gap-5 pb-10">
+
+      {/* Period selector */}
+      <div className="sticky top-14 z-10 bg-slate-950/95 backdrop-blur-sm pt-2 pb-3 border-b border-slate-800/60">
+        <div className="flex gap-1 mb-3 flex-wrap">
+          {(['day','week','month','custom'] as Period[]).map((p) => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={clsx('px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                period === p ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700')}>
+              {p === 'day' ? 'День' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Период'}
+            </button>
+          ))}
+        </div>
+        {period === 'day' && <DateBar selectedDate={dayDate} onDateChange={setDayDate} />}
+        {period === 'week' && (
+          <div className="relative inline-block">
+            <select value={weekIdx} onChange={(e) => setWeekIdx(Number(e.target.value))}
+              className="appearance-none bg-slate-800 border border-slate-700 text-slate-200 rounded-lg pl-4 pr-10 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]">
+              {weekOptions.map((w, i) => <option key={i} value={i}>{w.label}</option>)}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+        )}
+        {period === 'month' && (
+          <div className="relative inline-block">
+            <select value={monthIdx} onChange={(e) => setMonthIdx(Number(e.target.value))}
+              className="appearance-none bg-slate-800 border border-slate-700 text-slate-200 rounded-lg pl-4 pr-10 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]">
+              {monthOptions.map((m, i) => <option key={i} value={i}>{m.label}</option>)}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+        )}
+        {period === 'custom' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-slate-400 text-sm">С</span>
+            <input type="date" value={dmyToInput(customFrom)}
+              onChange={(e) => { if (e.target.value) setCustomFrom(inputToDmy(e.target.value)); }}
+              className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
+            <span className="text-slate-400 text-sm">по</span>
+            <input type="date" value={dmyToInput(customTo)}
+              onChange={(e) => { if (e.target.value) setCustomTo(inputToDmy(e.target.value)); }}
+              className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
+          </div>
+        )}
+      </div>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatCard label="Студентов" value={stats.totalStudents} accent="text-slate-100" />
+        <StatCard label="Визитов" value={stats.totalVisits} accent="text-indigo-400" />
+        <StatCard label="Уникальных" value={stats.studentStats.filter(s => s.visitCount > 0).length} accent="text-emerald-400" />
+        <StatCard label="Визит/студент" value={stats.avgVisitsPerStudent} accent="text-amber-400" />
+        <StatCard label="Дней с данными" value={stats.daysWithData} accent="text-sky-400" />
+      </div>
+
+      {/* Copy / Export */}
+      <div className="flex gap-2 flex-wrap">
+        <ActionBtn onClick={handleCopyList} copied={copiedList} icon={<Copy size={13} />} label="Скопировать список" color="slate" />
+        <ActionBtn onClick={handleCopyReport} copied={copiedReport} icon={<FileText size={13} />} label="Скопировать отчёт" color="indigo" />
+        <button onClick={() => exportCSV(students, dates, `report-${periodLabel.replace(/[\s–]+/g, '-')}.csv`)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
+          <Download size={13} />Скачать CSV
+        </button>
+      </div>
+
+      {/* Per-day table */}
+      {stats.byDay.length > 0 && (
+        <section>
+          <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
+            <BarChart2 size={15} className="text-indigo-400" />По дням
+          </h3>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500 text-xs">
+                  <th className="text-left px-4 py-2.5 font-medium">Дата</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Присутствовало</th>
+                  <th className="text-right px-4 py-2.5 font-medium hidden sm:table-cell">%</th>
+                  <th className="text-right px-4 py-2.5 font-medium hidden md:table-cell">Пиковый час</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.byDay.map((day) => {
+                  const pct = stats.totalStudents > 0 ? Math.round(day.presentCount / stats.totalStudents * 100) : 0;
+                  return (
+                    <tr key={day.date} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/30 transition-colors">
+                      <td className="px-4 py-2.5 text-slate-200 font-mono text-xs">{day.date}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className="text-indigo-300 font-medium">{day.presentCount}</span>
+                        <span className="text-slate-600 text-xs"> /{day.totalCount}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right hidden sm:table-cell">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-slate-400 text-xs w-8 text-right">{pct}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-slate-400 text-xs hidden md:table-cell">{day.peakHour ?? '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Student attendance table */}
+      <section>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <h3 className="text-sm font-semibold text-slate-300">Посещаемость студентов</h3>
+          <div className="flex gap-2 flex-wrap">
+            <div className="flex bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-xs">
+              {(['all','visited','absent'] as StudentFilter[]).map((f) => (
+                <button key={f} onClick={() => setStudentFilter(f)}
+                  className={clsx('px-3 py-1.5 font-medium transition-colors',
+                    studentFilter === f ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200')}>
+                  {f === 'all' ? 'Все' : f === 'visited' ? 'Были' : 'Не были'}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <select value={studentSort} onChange={(e) => setStudentSort(e.target.value as StudentSort)}
+                className="appearance-none bg-slate-800 border border-slate-700 text-slate-300 rounded-lg pl-3 pr-8 py-1.5 text-xs focus:outline-none [color-scheme:dark]">
+                <option value="visits">По визитам</option>
+                <option value="name">По имени</option>
+                <option value="lastVisit">По дате</option>
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-500 text-xs">
+                <th className="text-left px-4 py-2.5 font-medium">Студент</th>
+                <th className="text-right px-3 py-2.5 font-medium">Визиты</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">Первый</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">Последний</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Ср. мин</th>
+                <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell w-28">График</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredStudents.map((ss) => {
+                const barPct = Math.round(ss.visitCount / maxVisits * 100);
+                return (
+                  <tr key={ss.student.id} className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <div className="text-slate-200 text-sm font-medium leading-tight">{ss.student.name}</div>
+                      <div className="text-slate-500 text-xs truncate max-w-[160px]">{ss.student.currentTopic}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {ss.visitCount > 0
+                        ? <span className="text-indigo-300 font-semibold">{ss.visitCount}</span>
+                        : <span className="text-slate-600">0</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs font-mono hidden sm:table-cell">{ss.firstVisit ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs font-mono hidden sm:table-cell">{ss.lastVisit ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs hidden md:table-cell">{ss.avgDuration !== null ? ss.avgDuration : '—'}</td>
+                    <td className="px-4 py-2.5 hidden lg:table-cell">
+                      <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div className={clsx('h-full rounded-full', ss.visitCount > 0 ? 'bg-indigo-500' : '')} style={{ width: `${barPct}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredStudents.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-sm">Нет данных</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
+      <div className="text-slate-500 text-xs mb-1">{label}</div>
+      <div className={clsx('text-2xl font-bold', accent)}>{value}</div>
+    </div>
+  );
+}
+
+function ActionBtn({ onClick, copied, icon, label, color }: {
+  onClick: () => void; copied: boolean; icon: React.ReactNode; label: string; color: 'slate' | 'indigo';
+}) {
+  return (
+    <button onClick={onClick}
+      className={clsx('flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border',
+        copied
+          ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-400'
+          : color === 'indigo'
+            ? 'bg-indigo-900/30 border-indigo-700/50 text-indigo-300 hover:bg-indigo-800/40'
+            : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700')}>
+      {copied ? <Check size={13} /> : icon}
+      {copied ? 'Скопировано!' : label}
+    </button>
+  );
+}
