@@ -13,6 +13,15 @@ import { pruneOldEntries } from '../utils/dates';
 
 type RawStudent = Omit<Student, 'come'> & { come?: string | ComeEntry[] | null };
 
+function normalizeComeEntry(entry: Partial<ComeEntry>): ComeEntry {
+  return {
+    date: entry.date ?? '',
+    time_start: entry.time_start ?? '',
+    time_finish: entry.time_finish ?? '',
+    lesson_type: entry.lesson_type === 'online' ? 'online' : 'offline',
+  };
+}
+
 function deserializeCome(raw: RawStudent): Student {
   let come: ComeEntry[] = [];
   if (typeof raw.come === 'string' && raw.come.trim().startsWith('[')) {
@@ -20,7 +29,7 @@ function deserializeCome(raw: RawStudent): Student {
   } else if (Array.isArray(raw.come)) {
     come = raw.come;
   }
-  return { ...raw, come };
+  return { ...raw, come: come.map(normalizeComeEntry) };
 }
 
 function serializeCome(come: ComeEntry[]): string {

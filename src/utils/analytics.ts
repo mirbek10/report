@@ -192,7 +192,7 @@ export function generateDailyReport(
   lines.push(``);
 
   const parts: string[] = [];
-  if (offlineCount > 0) parts.push(`${offlineCount} гибрид`);
+  if (offlineCount > 0) parts.push(`${offlineCount} оффлайн`);
   if (onlineCount > 0) parts.push(`${onlineCount} онлайн`);
   lines.push(`3. Өткөрүлгөн сабактар: Бүгүн жалпы ${present.length} сабак өткөрүлдү (${parts.join(', ') || present.length + ' жалпы'}).`);
 

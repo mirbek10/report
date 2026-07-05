@@ -65,7 +65,7 @@ function generatePeriodReport(students: Student[], dates: string[], label: strin
     `Мезгил: ${label}`,
     `Жалпы студент: ${students.length}`,
     `Жалпы келген: ${visited.length} уникалдуу студент`,
-    `Жалпы сабак: ${total} (📍 ${offline} гибрид, 🌐 ${online} онлайн)`,
+    `Жалпы сабак: ${total} (📍 ${offline} оффлайн, 🌐 ${online} онлайн)`,
     ``,
     `Активдүү студенттер:`,
     ...visited.map(({ student, entries }, i) => {
@@ -118,8 +118,8 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
   const [copiedList, setCopiedList] = useState(false);
   const [copiedReport, setCopiedReport] = useState(false);
 
-  const weekOptions = useMemo(getWeekOptions, []);
-  const monthOptions = useMemo(getMonthOptions, []);
+  const weekOptions = useMemo(() => getWeekOptions(), []);
+  const monthOptions = useMemo(() => getMonthOptions(), []);
 
   const { dates, periodLabel } = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -195,45 +195,52 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
     <div className="flex flex-col gap-5 pb-10">
 
       {/* Period selector */}
-      <div className="sticky top-14 z-10 bg-slate-950/95 backdrop-blur-sm pt-2 pb-3 border-b border-slate-800/60">
+      <div className="sm:sticky sm:top-[96px] z-10 bg-slate-950/95 backdrop-blur-sm pt-2 pb-3 border-b border-slate-800/60">
         <div className="flex gap-1 mb-3 flex-wrap">
           {(['day','week','month','custom'] as Period[]).map((p) => (
             <button key={p} onClick={() => setPeriod(p)}
-              className={clsx('px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                period === p ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700')}>
+              className={clsx('flex-1 sm:flex-initial text-center px-4 py-2.5 sm:py-2 rounded-xl text-sm font-semibold transition-all border duration-200',
+                period === p 
+                  ? 'bg-indigo-655 border-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800')}
+            >
               {p === 'day' ? 'День' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Период'}
             </button>
           ))}
         </div>
         {period === 'day' && <DateBar selectedDate={dayDate} onDateChange={setDayDate} />}
         {period === 'week' && (
-          <div className="relative inline-block">
+          <div className="relative inline-block w-full sm:w-auto">
             <select value={weekIdx} onChange={(e) => setWeekIdx(Number(e.target.value))}
-              className="appearance-none bg-slate-800 border border-slate-700 text-slate-200 rounded-lg pl-4 pr-10 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]">
+              className="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-4 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
               {weekOptions.map((w, i) => <option key={i} value={i}>{w.label}</option>)}
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
         )}
         {period === 'month' && (
-          <div className="relative inline-block">
+          <div className="relative inline-block w-full sm:w-auto">
             <select value={monthIdx} onChange={(e) => setMonthIdx(Number(e.target.value))}
-              className="appearance-none bg-slate-800 border border-slate-700 text-slate-200 rounded-lg pl-4 pr-10 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]">
+              className="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-4 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
               {monthOptions.map((m, i) => <option key={i} value={i}>{m.label}</option>)}
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
         )}
         {period === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-slate-400 text-sm">С</span>
-            <input type="date" value={dmyToInput(customFrom)}
-              onChange={(e) => { if (e.target.value) setCustomFrom(inputToDmy(e.target.value)); }}
-              className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
-            <span className="text-slate-400 text-sm">по</span>
-            <input type="date" value={dmyToInput(customTo)}
-              onChange={(e) => { if (e.target.value) setCustomTo(inputToDmy(e.target.value)); }}
-              className="bg-slate-800 border border-slate-700 text-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]" />
+          <div className="flex items-center gap-2 flex-wrap w-full">
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+              <span className="text-slate-500 text-xs font-semibold uppercase w-4 text-center">С</span>
+              <input type="date" value={dmyToInput(customFrom)}
+                onChange={(e) => { if (e.target.value) setCustomFrom(inputToDmy(e.target.value)); }}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-350 rounded-xl px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer" />
+            </div>
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+              <span className="text-slate-500 text-xs font-semibold uppercase w-4 text-center">по</span>
+              <input type="date" value={dmyToInput(customTo)}
+                onChange={(e) => { if (e.target.value) setCustomTo(inputToDmy(e.target.value)); }}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-350 rounded-xl px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer" />
+            </div>
           </div>
         )}
       </div>
@@ -264,8 +271,8 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
           <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
             <BarChart2 size={15} className="text-indigo-400" />По дням
           </h3>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto scrollbar-thin">
+            <table className="w-full text-sm min-w-[500px] sm:min-w-0">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-500 text-xs">
                   <th className="text-left px-4 py-2.5 font-medium">Дата</th>
@@ -336,8 +343,8 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto scrollbar-thin">
+          <table className="w-full text-sm min-w-[600px] sm:min-w-0">
             <thead>
               <tr className="border-b border-slate-800 text-slate-500 text-xs">
                 <th className="text-left px-4 py-2.5 font-medium">Студент</th>

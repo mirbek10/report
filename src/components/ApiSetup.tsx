@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GraduationCap, Link2, Loader2, CheckCircle2, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Link2, Loader2, CheckCircle2, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { setApiClient } from '../api/client';
 import { fetchAllStudents } from '../api/students';
 
@@ -66,11 +66,9 @@ export function ApiSetup({ onConfirm }: ApiSetupProps) {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 mb-4">
-            <GraduationCap size={32} className="text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Report</h1>
-          <p className="text-slate-400 mt-2 text-sm">Система учёта посещаемости</p>
+          <img src="/favicon.svg" alt="" className="w-16 h-16 rounded-2xl mb-4 shadow-lg shadow-indigo-900/40" />
+          <h1 className="text-3xl font-bold text-white tracking-tight">Ончёт</h1>
+          <p className="text-slate-400 mt-2 text-sm">Журнал посещаемости студентов</p>
         </div>
 
         {/* Main card */}

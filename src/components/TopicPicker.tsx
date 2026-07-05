@@ -58,17 +58,21 @@ function loadCustomTopics(): string[] {
 }
 
 function saveCustomTopics(topics: string[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(topics)); } catch {}
+  try { 
+    localStorage.setItem(LS_KEY, JSON.stringify(topics)); 
+  } catch (err) {
+    console.warn('Failed to save custom topics:', err);
+  }
 }
 
-export function addCustomTopic(topic: string) {
+function addCustomTopic(topic: string) {
   const existing = loadCustomTopics();
   if (!existing.includes(topic)) {
     saveCustomTopics([topic, ...existing]);
   }
 }
 
-export function getAllTopics(): string[] {
+function getAllTopics(): string[] {
   const custom = loadCustomTopics();
   // Custom topics first, then defaults (deduped)
   const all = [...custom, ...DEFAULT_TOPICS];

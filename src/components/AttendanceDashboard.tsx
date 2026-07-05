@@ -94,10 +94,8 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
       <header className="sticky top-0 z-10 bg-slate-950/90 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
           <div className="flex items-center gap-2 mr-auto min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-              <ClipboardList size={14} className="text-white" />
-            </div>
-            <span className="font-bold text-slate-100 text-sm hidden sm:inline">Report</span>
+            <img src="/favicon.svg" alt="" className="w-7 h-7 rounded-lg flex-shrink-0" />
+            <span className="font-bold text-slate-100 text-sm hidden sm:inline">Ончёт</span>
             {/* Mentor name input — inline, saves to localStorage */}
             <input
               type="text"
@@ -132,25 +130,27 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
             <DateBar selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setSearch(''); }} />
             {students.length > 0 && <StatsBar students={students} date={selectedDate} />}
 
-            <div className="flex gap-2 flex-wrap items-center">
-              <div className="relative flex-1 min-w-[180px]">
+            <div className="flex flex-col md:flex-row gap-3 w-full">
+              <div className="relative flex-1">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 <input type="text" placeholder="Поиск по имени..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-500" />
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-650 placeholder-slate-500" />
               </div>
-              <button onClick={handleMarkAllPresent}
-                disabled={absentList.length === 0 || markCome.isPending}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white transition-colors whitespace-nowrap">
-                {markCome.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCheck size={15} />}
-                <span className="hidden sm:inline">{markCome.isPending ? 'Отмечаем...' : `Все пришли (${absentList.length})`}</span>
-                <span className="sm:hidden">{absentList.length}</span>
-              </button>
-              <button onClick={() => refetch()}
-                className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors">
-                <RefreshCw size={15} />
-              </button>
-              <CopyButtons students={students} date={selectedDate} mentorName={mentorName || 'Ментор'} />
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                <button onClick={handleMarkAllPresent}
+                  disabled={absentList.length === 0 || markCome.isPending}
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-705 hover:bg-emerald-600 disabled:bg-slate-900/60 disabled:border-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white transition-all whitespace-nowrap border border-transparent">
+                  {markCome.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCheck size={15} />}
+                  <span>{markCome.isPending ? 'Отмечаем...' : `Все пришли (${absentList.length})`}</span>
+                </button>
+                <button onClick={() => refetch()}
+                  title="Обновить"
+                  className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850 transition-colors">
+                  <RefreshCw size={15} />
+                </button>
+                <CopyButtons students={students} date={selectedDate} mentorName={mentorName || 'Ментор'} />
+              </div>
             </div>
 
             {/* Filter tabs */}
