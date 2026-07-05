@@ -75,12 +75,9 @@ export const useStudents = () => {
 
   const batchAddStudents = useMutation({
     mutationFn: async (students: Omit<Student, 'id'>[]) => {
-      const BATCH = 5; const DELAY = 300;
       const results: Student[] = [];
-      for (let i = 0; i < students.length; i += BATCH) {
-        const res = await Promise.all(students.slice(i, i + BATCH).map(createStudent));
-        results.push(...res);
-        if (i + BATCH < students.length) await new Promise((r) => setTimeout(r, DELAY));
+      for (const student of students) {
+        results.push(await createStudent(student));
       }
       return results;
     },
