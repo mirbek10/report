@@ -351,16 +351,14 @@ export function StudentsEditor() {
     setXlsxSaving(true);
     setXlsxProgress({ done: 0, total: selected.length });
     try {
-      const BATCH = 5; const DELAY = 300;
-      for (let i = 0; i < selected.length; i += BATCH) {
-        const chunk = selected.slice(i, i + BATCH);
-        const res = await Promise.all(chunk.map((r) => addStudent.mutateAsync({ name: r.name, groupName: r.groupName, currentTopic: r.currentTopic, come: [] })));
+      for (let i = 0; i < selected.length; i++) {
+        const r = selected[i];
+        const created = await addStudent.mutateAsync({ name: r.name, groupName: r.groupName, currentTopic: r.currentTopic, come: [] });
         setRows((prev) => {
           const base = (prev.length === 1 && !prev[0].name.trim() && !prev[0].id) ? [] : prev;
-          return [...base, ...res.map(studentToRow)];
+          return [...base, studentToRow(created)];
         });
-        setXlsxProgress({ done: Math.min(i + BATCH, selected.length), total: selected.length });
-        if (i + BATCH < selected.length) await new Promise((r) => setTimeout(r, DELAY));
+        setXlsxProgress({ done: i + 1, total: selected.length });
       }
       setXlsxPreview(null);
     } finally { setXlsxSaving(false); setXlsxProgress(null); }

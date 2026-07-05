@@ -32,6 +32,13 @@ function deserializeCome(raw: RawStudent): Student {
   return { ...raw, come: come.map(normalizeComeEntry) };
 }
 
+function generateStudentId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `st_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+}
+
 function serializeCome(come: ComeEntry[]): string {
   return JSON.stringify(come);
 }
@@ -54,7 +61,8 @@ export const fetchStudentById = async (id: string): Promise<Student> => {
 export const createStudent = async (
   student: Omit<Student, 'id'>
 ): Promise<Student> => {
-  const payload = { ...student, come: serializeCome([]) };
+  const id = generateStudentId();
+  const payload = { id, ...student, come: serializeCome([]) };
   const { data } = await getApiClient().post<RawStudent>('/students', payload);
   return deserializeCome(data);
 };
