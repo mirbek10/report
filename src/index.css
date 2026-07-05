@@ -7,7 +7,7 @@
 html, body {
     max-width: 100%;
     overflow-x: hidden;
-    position: relative;
+    position: relative;   
   }
   body {
     @apply bg-slate-950 text-slate-100 antialiased;
