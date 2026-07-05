@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireApiUrl } from './router/guards';
 import { SetupPage } from './pages/SetupPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { getStoredApiUrl, setApiClient } from './api/client';
 
 // Rehydrate API client singleton on app load
@@ -22,7 +23,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
