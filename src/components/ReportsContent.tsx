@@ -59,22 +59,27 @@ function generatePeriodReport(students: Student[], dates: string[], label: strin
     .filter((x) => x.entries.length > 0)
     .sort((a, b) => b.entries.length - a.entries.length);
   const total = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
+  const online = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
+  const offline = total - online;
   return [
     `Мезгил: ${label}`,
     `Жалпы студент: ${students.length}`,
     `Жалпы келген: ${visited.length} уникалдуу студент`,
-    `Жалпы сабак: ${total} гибрид сабак`,
+    `Жалпы сабак: ${total} (📍 ${offline} гибрид, 🌐 ${online} онлайн)`,
     ``,
     `Активдүү студенттер:`,
-    ...visited.map(({ student, entries }, i) =>
-      `${i + 1}. ${student.name} — ${entries.length} жолу (${entries.map((e) => e.time_start).join(', ')})`
-    ),
+    ...visited.map(({ student, entries }, i) => {
+      const on = entries.filter((e) => e.lesson_type === 'online').length;
+      const off = entries.length - on;
+      const detail = [off > 0 && `📍${off}`, on > 0 && `🌐${on}`].filter(Boolean).join(' ');
+      return `${i + 1}. ${student.name} — ${entries.length} жолу (${detail})`;
+    }),
   ].join('\n');
 }
 
 function exportCSV(students: Student[], dates: string[], filename: string) {
   const dateSet = new Set(dates);
-  const rows = [['Имя', 'Тема', 'Посещений', 'Первый визит', 'Последний визит', 'Ср. длит. (мин)']];
+  const rows = [['Имя', 'Тема', 'Всего визитов', 'Оффлайн', 'Онлайн', 'Первый визит', 'Последний визит', 'Ср. длит. (мин)']];
   for (const s of students) {
     const entries = s.come.filter((e) => dateSet.has(e.date));
     const sorted = [...entries].sort((a, b) => parseDMY(a.date).getTime() - parseDMY(b.date).getTime());
@@ -85,7 +90,13 @@ function exportCSV(students: Student[], dates: string[], filename: string) {
       return d > 0 ? d : null;
     }).filter((d): d is number => d !== null);
     const avgDur = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : '';
-    rows.push([s.name, s.currentTopic, String(entries.length), sorted[0]?.date ?? '', sorted.at(-1)?.date ?? '', String(avgDur)]);
+    const offline = entries.filter((e) => e.lesson_type === 'offline').length;
+    const online = entries.filter((e) => e.lesson_type === 'online').length;
+    rows.push([
+      s.name, s.currentTopic,
+      String(entries.length), String(offline), String(online),
+      sorted[0]?.date ?? '', sorted.at(-1)?.date ?? '', String(avgDur),
+    ]);
   }
   const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -228,12 +239,13 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label="Студентов" value={stats.totalStudents} accent="text-slate-100" />
         <StatCard label="Визитов" value={stats.totalVisits} accent="text-indigo-400" />
         <StatCard label="Уникальных" value={stats.studentStats.filter(s => s.visitCount > 0).length} accent="text-emerald-400" />
         <StatCard label="Визит/студент" value={stats.avgVisitsPerStudent} accent="text-amber-400" />
-        <StatCard label="Дней с данными" value={stats.daysWithData} accent="text-sky-400" />
+        <StatCard label="Оффлайн" value={stats.offlineVisits} accent="text-emerald-500" icon="📍" />
+        <StatCard label="Онлайн" value={stats.onlineVisits} accent="text-sky-400" icon="🌐" />
       </div>
 
       {/* Copy / Export */}
@@ -258,6 +270,8 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
                 <tr className="border-b border-slate-800 text-slate-500 text-xs">
                   <th className="text-left px-4 py-2.5 font-medium">Дата</th>
                   <th className="text-right px-4 py-2.5 font-medium">Присутствовало</th>
+                  <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">Офлайн</th>
+                  <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">Онлайн</th>
                   <th className="text-right px-4 py-2.5 font-medium hidden sm:table-cell">%</th>
                   <th className="text-right px-4 py-2.5 font-medium hidden md:table-cell">Пиковый час</th>
                 </tr>
@@ -271,6 +285,12 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
                       <td className="px-4 py-2.5 text-right">
                         <span className="text-indigo-300 font-medium">{day.presentCount}</span>
                         <span className="text-slate-600 text-xs"> /{day.totalCount}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right hidden sm:table-cell">
+                        <span className="text-emerald-500 text-xs font-medium">{day.offlineCount > 0 ? `📍 ${day.offlineCount}` : '—'}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right hidden sm:table-cell">
+                        <span className="text-sky-400 text-xs font-medium">{day.onlineCount > 0 ? `🌐 ${day.onlineCount}` : '—'}</span>
                       </td>
                       <td className="px-4 py-2.5 text-right hidden sm:table-cell">
                         <div className="flex items-center justify-end gap-2">
@@ -321,10 +341,12 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
             <thead>
               <tr className="border-b border-slate-800 text-slate-500 text-xs">
                 <th className="text-left px-4 py-2.5 font-medium">Студент</th>
-                <th className="text-right px-3 py-2.5 font-medium">Визиты</th>
-                <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">Первый</th>
-                <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">Последний</th>
-                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Ср. мин</th>
+                <th className="text-right px-3 py-2.5 font-medium">Всего</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">📍 Офлайн</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden sm:table-cell">🌐 Онлайн</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Первый</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Последний</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden lg:table-cell">Ср. мин</th>
                 <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell w-28">График</th>
               </tr>
             </thead>
@@ -342,9 +364,15 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
                         ? <span className="text-indigo-300 font-semibold">{ss.visitCount}</span>
                         : <span className="text-slate-600">0</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs font-mono hidden sm:table-cell">{ss.firstVisit ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs font-mono hidden sm:table-cell">{ss.lastVisit ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs hidden md:table-cell">{ss.avgDuration !== null ? ss.avgDuration : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-xs hidden sm:table-cell">
+                      {ss.offlineCount > 0 ? <span className="text-emerald-500 font-medium">{ss.offlineCount}</span> : <span className="text-slate-700">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-xs hidden sm:table-cell">
+                      {ss.onlineCount > 0 ? <span className="text-sky-400 font-medium">{ss.onlineCount}</span> : <span className="text-slate-700">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs font-mono hidden md:table-cell">{ss.firstVisit ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs font-mono hidden md:table-cell">{ss.lastVisit ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-400 text-xs hidden lg:table-cell">{ss.avgDuration !== null ? ss.avgDuration : '—'}</td>
                     <td className="px-4 py-2.5 hidden lg:table-cell">
                       <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
                         <div className={clsx('h-full rounded-full', ss.visitCount > 0 ? 'bg-indigo-500' : '')} style={{ width: `${barPct}%` }} />
@@ -354,7 +382,7 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
                 );
               })}
               {filteredStudents.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-sm">Нет данных</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500 text-sm">Нет данных</td></tr>
               )}
             </tbody>
           </table>
@@ -364,10 +392,12 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({ label, value, accent, icon }: { label: string; value: number; accent: string; icon?: string }) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-      <div className="text-slate-500 text-xs mb-1">{label}</div>
+      <div className="text-slate-500 text-xs mb-1 flex items-center gap-1">
+        {icon && <span>{icon}</span>}{label}
+      </div>
       <div className={clsx('text-2xl font-bold', accent)}>{value}</div>
     </div>
   );

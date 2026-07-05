@@ -69,7 +69,7 @@ export function ApiSetup({ onConfirm }: ApiSetupProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 mb-4">
             <GraduationCap size={32} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Onchet</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Report</h1>
           <p className="text-slate-400 mt-2 text-sm">Система учёта посещаемости</p>
         </div>
 

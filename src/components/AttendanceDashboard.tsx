@@ -97,7 +97,7 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
             <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
               <ClipboardList size={14} className="text-white" />
             </div>
-            <span className="font-bold text-slate-100 text-sm hidden sm:inline">Onchet</span>
+            <span className="font-bold text-slate-100 text-sm hidden sm:inline">Report</span>
             {/* Mentor name input — inline, saves to localStorage */}
             <input
               type="text"
