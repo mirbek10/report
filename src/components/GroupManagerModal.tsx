@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react';
 import { X, Pencil, Check, Loader2, Star, Users, AlertTriangle } from 'lucide-react';
-import { clsx } from 'clsx';
 import {
   getAllGroups, loadCustomGroups, getDefaultGroup, setDefaultGroup,
-  addCustomGroup, DEFAULT_GROUPS,
+  addCustomGroup,
 } from './GroupPicker';
 import type { Student } from '../types';
 
