@@ -16,7 +16,6 @@ const TOPICS = [
 ];
 
 const DEFAULT_TOPIC = 'HTML & CSS';
-const DEFAULT_GROUP = 'Группа A';
 
 interface Row {
   key: string;
@@ -154,7 +153,7 @@ function XlsxImportModal({ rows, existingNames, onClose, onConfirm, isSaving, pr
   );
   const [groupAll, setGroupAll] = useState(() => getDefaultGroup());
   const [topicAll, setTopicAll] = useState(DEFAULT_TOPIC);
-  const [groupOptions, setGroupOptions] = useState<string[]>(getAllGroups);
+  const [groupOptions] = useState<string[]>(getAllGroups);
 
   const toggleRow = (i: number) =>
     setPreview((p) => p.map((r, idx) => idx === i ? { ...r, selected: !r.selected } : r));
