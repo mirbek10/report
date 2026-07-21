@@ -76,6 +76,18 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
     updateComeTime.mutate({ student, date: selectedDate, patch: { lesson_type } });
   }, [students, selectedDate, updateComeTime]);
 
+  const handleRenameGroup = useCallback(async (oldName: string, newName: string) => {
+    const affected = students.filter((s) => s.groupName === oldName);
+    for (let i = 0; i < affected.length; i += 5) {
+      await Promise.all(
+        affected.slice(i, i + 5).map((s) =>
+          editStudent.mutateAsync({ id: s.id, updates: { groupName: newName } })
+        )
+      );
+      if (i + 5 < affected.length) await new Promise((r) => setTimeout(r, 300));
+    }
+  }, [students, editStudent]);
+
   const handleMarkAllPresent = useCallback(async () => {
     if (absentList.length === 0) return;
     const now = nowHHMM();
@@ -214,7 +226,7 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
         )}
 
         {mainTab === 'students' && <StudentsEditor />}
-        {mainTab === 'reports' && <ReportsContent students={students} mentorName={mentorName || 'Ментор'} />}
+        {mainTab === 'reports' && <ReportsContent students={students} mentorName={mentorName || 'Ментор'} onRenameGroup={handleRenameGroup} />}
       </main>
     </div>
   );

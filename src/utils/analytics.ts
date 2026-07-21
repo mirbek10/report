@@ -159,42 +159,69 @@ export function computePeriodStats(students: Student[], dates: string[]): Period
 export function generateDailyReport(
   students: Student[],
   date: string,
-  mentorName = 'Ментор'
+  mentorName = 'Ментор',
+  defaultGroup = ''
 ): string {
   const dateObj = parseDMY(date);
-  const months = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-  const kyrgyzDate = `${dateObj.getDate()}-${months[dateObj.getMonth()]}, ${dateObj.getFullYear()}-жыл`;
+  const KG_MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const kyrgyzDate = `${dateObj.getDate()}-${KG_MONTHS[dateObj.getMonth()]}, ${dateObj.getFullYear()}-жыл`;
 
+  // All present entries for this date, sorted by time
   const present = students
     .map((s) => ({ student: s, entry: s.come.find((e) => e.date === date) }))
     .filter((x): x is { student: Student; entry: ComeEntry } => !!x.entry)
     .sort((a, b) => a.entry.time_start.localeCompare(b.entry.time_start));
 
-  const onlineCount = present.filter((x) => x.entry.lesson_type === 'online').length;
-  const offlineCount = present.filter((x) => x.entry.lesson_type === 'offline').length;
+  const totalOnline = present.filter((x) => x.entry.lesson_type === 'online').length;
+  const totalOffline = present.filter((x) => x.entry.lesson_type === 'offline').length;
+
+  // Total students — from default group if set, otherwise all
+  const countSource = defaultGroup
+    ? students.filter((s) => (s.groupName || '') === defaultGroup)
+    : students;
+
+  // Groups that have at least one present student today
+  const activeGroupNames = [
+    ...new Set(present.map((x) => x.student.groupName || 'Жалпы')),
+  ].sort();
 
   const lines: string[] = [
-    `Ментор: ${mentorName}`,
-    `Күнү: ${kyrgyzDate}`,
+    `📋 Күнүмдүк отчёт`,
     ``,
-    `1. Жалпы студенттердин саны: ${students.length}`,
+    `👤 Башкаруучу ментор: ${mentorName}`,
+    `📅 Күнү: ${kyrgyzDate}`,
     ``,
-    `2. Бүгүнкү байланыш: Студенттердин суроолоруна жооп берип, өз убагында тиешелүү көмөк көрсөтүлдү.`,
-    ``,
-    `Өткөрүлгөн сабактар жана жекече иштөө убактысы:`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `📊 Жалпы маалымат:`,
+    `   Жалпы студенттердин саны: ${countSource.length} студент${defaultGroup ? ` (${defaultGroup})` : ''}`,
+    `   Бүгүн келген: ${present.length} студент`,
+    `   ├─ 📍 Оффлайн: ${totalOffline}`,
+    `   └─ 🌐 Онлайн: ${totalOnline}`,
   ];
 
-  present.forEach(({ student, entry }, i) => {
-    const typeLabel = entry.lesson_type === 'online' ? 'онлайн' : 'оффлайн';
-    lines.push(`${i + 1}. ${student.name} (${entry.time_start} – ${entry.time_finish}) – ${student.currentTopic} [${typeLabel}]`);
-  });
+  // Per-group breakdown — only groups with present students
+  if (activeGroupNames.length > 0) {
+    lines.push(``, `━━━━━━━━━━━━━━━━━━━━━━`, `👥 Группалар боюнча:`);
 
-  lines.push(``);
+    for (const group of activeGroupNames) {
+      const gPresent = present.filter((x) => (x.student.groupName || 'Жалпы') === group);
+      const gOnline = gPresent.filter((x) => x.entry.lesson_type === 'online').length;
+      const gOffline = gPresent.filter((x) => x.entry.lesson_type === 'offline').length;
+      const isDefault = defaultGroup && group === defaultGroup;
 
-  const parts: string[] = [];
-  if (offlineCount > 0) parts.push(`${offlineCount} оффлайн`);
-  if (onlineCount > 0) parts.push(`${onlineCount} онлайн`);
-  lines.push(`3. Өткөрүлгөн сабактар: Бүгүн жалпы ${present.length} сабак өткөрүлдү (${parts.join(', ') || present.length + ' жалпы'}).`);
+      lines.push(``);
+      lines.push(`📌 ${group}${isDefault ? ' ⭐' : ''}`);
+      lines.push(`   Келди: ${gPresent.length}  │  📍 ${gOffline}  🌐 ${gOnline}`);
+      gPresent.forEach(({ student, entry }, i) => {
+        const icon = entry.lesson_type === 'online' ? '🌐' : '📍';
+        const branch = i === gPresent.length - 1 ? '└─' : '├─';
+        lines.push(`   ${branch} ${i + 1}. ${student.name} ${icon} ${entry.time_start}–${entry.time_finish}`);
+      });
+    }
+  }
+
+  lines.push(``, `━━━━━━━━━━━━━━━━━━━━━━`);
+  lines.push(`✅ Жыйынтык: ${present.length} сабак өткөрүлдү (📍 ${totalOffline} оффлайн, 🌐 ${totalOnline} онлайн)`);
 
   return lines.join('\n');
 }

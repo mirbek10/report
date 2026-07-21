@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { BarChart2, Copy, FileText, Download, Check, ChevronDown, Users } from 'lucide-react';
+import { BarChart2, Copy, FileText, Download, Check, ChevronDown, Users, Settings2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { computePeriodStats, copyToClipboard, generateDailyReport, dateRange } from '../utils/analytics';
 import { fmtDMY, parseDMY, todayDMY } from '../utils/dates';
 import { DateBar } from './DateBar';
 import { getDefaultGroup } from './GroupPicker';
+import { GroupManagerModal } from './GroupManagerModal';
 import type { Student } from '../types';
 
 type Period = 'day' | 'week' | 'month' | 'custom';
@@ -16,6 +17,7 @@ const ALL_GROUPS = '__all__';
 interface Props {
   students: Student[];
   mentorName?: string;
+  onRenameGroup: (oldName: string, newName: string) => Promise<void>;
 }
 
 function getMondayOfWeek(d: Date): Date {
@@ -106,6 +108,8 @@ function generateMonthlyAllGroupsReport(students: Student[], dates: string[], la
     const gs = students.filter((s) => (s.groupName || 'Без группы') === group);
     const gVisits = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
     const gVisited = gs.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
+    // Skip groups where nobody came
+    if (gVisited === 0) continue;
     const gOnline = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
     const gOffline = gVisits - gOnline;
     lines.push(``, `📌 ${group} (${gs.length} студент)`);
@@ -121,10 +125,6 @@ function generateMonthlyAllGroupsReport(students: Student[], dates: string[], la
       const detail = [off > 0 && `📍${off}`, on > 0 && `🌐${on}`].filter(Boolean).join(' ');
       lines.push(`   ${i + 1}. ${s.name} — ${cnt} жолу (${detail})`);
     });
-    const absent = gs.filter((s) => !s.come.some((e) => dateSet.has(e.date)));
-    if (absent.length > 0) {
-      lines.push(`   ❌ Келбегендер: ${absent.map((s) => s.name).join(', ')}`);
-    }
   }
 
   return lines.join('\n');
@@ -159,7 +159,7 @@ function exportCSV(students: Student[], dates: string[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ReportsContent({ students, mentorName = 'Ментор' }: Props) {
+export function ReportsContent({ students, mentorName = 'Ментор', onRenameGroup }: Props) {
   const [period, setPeriod] = useState<Period>('day');
   const [dayDate, setDayDate] = useState(todayDMY);
   const [weekIdx, setWeekIdx] = useState(0);
@@ -171,6 +171,8 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
   const [selectedGroup, setSelectedGroup] = useState<string>(ALL_GROUPS);
   const [copiedList, setCopiedList] = useState(false);
   const [copiedReport, setCopiedReport] = useState(false);
+  const [showGroupManager, setShowGroupManager] = useState(false);
+  const [defaultGroup, setDefaultGroupState] = useState(getDefaultGroup);
 
   const weekOptions = useMemo(() => getWeekOptions(), []);
   const monthOptions = useMemo(() => getMonthOptions(), []);
@@ -192,6 +194,13 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
       setDefaultApplied(true);
     }
   }, [groupOptions, defaultApplied]);
+
+  // Refresh defaultGroup when group manager closes
+  useEffect(() => {
+    if (!showGroupManager) {
+      setDefaultGroupState(getDefaultGroup());
+    }
+  }, [showGroupManager]);
 
   // For month — always show all; for others — filter by selected group
   const activeStudents = useMemo(() => {
@@ -220,6 +229,14 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
   }, [period, dayDate, weekIdx, monthIdx, customFrom, customTo, weekOptions, monthOptions]);
 
   const stats = useMemo(() => computePeriodStats(activeStudents, dates), [activeStudents, dates]);
+
+  // Count of students in the default (main) group for the stats card
+  const mainGroupStudentCount = useMemo(() => {
+    const def = defaultGroup;
+    if (!def) return students.length;
+    const count = students.filter((s) => (s.groupName || '') === def).length;
+    return count > 0 ? count : students.length;
+  }, [students, defaultGroup]);
 
   // Group summary for month tab
   const groupSummary = useMemo(() => {
@@ -292,7 +309,7 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
     if (period === 'month') {
       text = generateMonthlyAllGroupsReport(students, dates, periodLabel);
     } else if (period === 'day') {
-      text = generateDailyReport(activeStudents, dayDate, mentorName);
+      text = generateDailyReport(activeStudents, dayDate, mentorName, getDefaultGroup());
     } else {
       text = generatePeriodReport(activeStudents, dates, periodLabel);
     }
@@ -400,7 +417,11 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Студентов" value={stats.totalStudents} accent="text-slate-100" />
+        <StatCard
+          label={defaultGroup ? `Студентов (${defaultGroup})` : 'Студентов'}
+          value={mainGroupStudentCount}
+          accent="text-slate-100"
+        />
         <StatCard label="Визитов" value={stats.totalVisits} accent="text-indigo-400" />
         <StatCard label="Уникальных" value={stats.studentStats.filter(s => s.visitCount > 0).length} accent="text-emerald-400" />
         <StatCard label="Визит/студент" value={stats.avgVisitsPerStudent} accent="text-amber-400" />
@@ -442,12 +463,16 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
       )}
 
       {/* Copy / Export */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         <ActionBtn onClick={handleCopyList} copied={copiedList} icon={<Copy size={13} />} label="Скопировать список" color="slate" />
         <ActionBtn onClick={handleCopyReport} copied={copiedReport} icon={<FileText size={13} />} label="Скопировать отчёт" color="indigo" />
         <button onClick={() => exportCSV(activeStudents, dates, `report-${periodLabel.replace(/[\s–]+/g, '-')}.csv`)}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
           <Download size={13} />Скачать CSV
+        </button>
+        <button onClick={() => setShowGroupManager(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors ml-auto">
+          <Settings2 size={13} />Группы
         </button>
       </div>
 
@@ -581,6 +606,18 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
           </table>
         </div>
       </section>
+
+      {/* Group manager modal */}
+      {showGroupManager && (
+        <GroupManagerModal
+          students={students}
+          onClose={() => setShowGroupManager(false)}
+          onRenameGroup={async (oldName, newName) => {
+            await onRenameGroup(oldName, newName);
+            setDefaultGroupState(getDefaultGroup());
+          }}
+        />
+      )}
     </div>
   );
 }

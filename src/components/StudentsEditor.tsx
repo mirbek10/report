@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Trash2, Plus, Upload, Loader2, Check, AlertCircle, FileSpreadsheet, X, Download, Edit2 } from 'lucide-react';
+import { Trash2, Plus, Upload, Loader2, Check, AlertCircle, FileSpreadsheet, X, Download, Edit2, Settings2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import * as XLSX from 'xlsx';
 import { useStudents } from '../hooks/useStudents';
 import { TopicPicker } from './TopicPicker';
 import { GroupPicker, getAllGroups, getDefaultGroup } from './GroupPicker';
 import { StudentFormModal } from './StudentFormModal';
+import { GroupManagerModal } from './GroupManagerModal';
 import type { Student } from '../types';
 
 const TOPICS = [
@@ -302,12 +303,27 @@ export function StudentsEditor() {
   const [xlsxSaving, setXlsxSaving] = useState(false);
   const [xlsxProgress, setXlsxProgress] = useState<{ done: number; total: number } | null>(null);
   const [xlsxError, setXlsxError] = useState('');
-  
+  const [showGroupManager, setShowGroupManager] = useState(false);
+
   // Mobile Form Modal state
   const [editingStudent, setEditingStudent] = useState<{ id?: string; name: string; groupName: string; currentTopic: string; key: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
+  // Bulk rename a group across all students
+  const handleRenameGroup = useCallback(async (oldName: string, newName: string) => {
+    const affected = (students ?? []).filter((s) => s.groupName === oldName);
+    for (let i = 0; i < affected.length; i += 5) {
+      await Promise.all(
+        affected.slice(i, i + 5).map((s) =>
+          editStudent.mutateAsync({ id: s.id, updates: { groupName: newName } })
+        )
+      );
+    }
+    // Also update local rows state
+    setRows((prev) => prev.map((r) => r.groupName === oldName ? { ...r, groupName: newName } : r));
+  }, [students, editStudent]);
 
   useEffect(() => {
     if (students && !initialised) {
@@ -471,6 +487,14 @@ export function StudentsEditor() {
             Добавить
           </button>
           
+          {/* Manage groups */}
+          <button
+            onClick={() => setShowGroupManager(true)}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+            title="Управление группами">
+            <Settings2 size={13} />
+            <span>Группы</span>
+          </button>
           {/* Export students */}
           <button
             onClick={() => students && students.length > 0 && exportStudents(students)}
@@ -701,6 +725,15 @@ export function StudentsEditor() {
           onClose={() => setEditingStudent(null)}
           onSave={handleModalSave}
           onDelete={editingStudent.id ? handleModalDelete : undefined}
+        />
+      )}
+
+      {/* Group Manager Modal */}
+      {showGroupManager && (
+        <GroupManagerModal
+          students={students ?? []}
+          onClose={() => setShowGroupManager(false)}
+          onRenameGroup={handleRenameGroup}
         />
       )}
     </div>
