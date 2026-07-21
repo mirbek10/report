@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, Users, GraduationCap, Trash2 } from 'lucide-react';
+import { X, GraduationCap, Trash2 } from 'lucide-react';
 import { TopicPicker } from './TopicPicker';
+import { GroupPicker, getDefaultGroup } from './GroupPicker';
 
 interface StudentFormModalProps {
   student?: { id?: string; name: string; groupName: string; currentTopic: string };
@@ -16,9 +17,9 @@ export function StudentFormModal({
   onDelete,
 }: StudentFormModalProps) {
   const isEditing = !!student?.id;
-  
+
   const [name, setName] = useState(student?.name || '');
-  const [groupName, setGroupName] = useState(student?.groupName || 'Группа A');
+  const [groupName, setGroupName] = useState(student?.groupName || getDefaultGroup());
   const [currentTopic, setCurrentTopic] = useState(student?.currentTopic || 'HTML & CSS');
   const [error, setError] = useState('');
 
@@ -39,7 +40,7 @@ export function StudentFormModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-visible transform transition-all scale-95 duration-200">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div>
@@ -50,8 +51,8 @@ export function StudentFormModal({
               Заполните информацию о студенте
             </p>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-xl transition-colors"
           >
             <X size={18} />
@@ -60,7 +61,7 @@ export function StudentFormModal({
 
         {/* Form Body */}
         <div className="p-5 space-y-4 overflow-visible">
-          
+
           {error && (
             <div className="bg-red-950/40 border border-red-900/40 text-red-400 text-xs px-3.5 py-2.5 rounded-xl">
               {error}
@@ -86,19 +87,12 @@ export function StudentFormModal({
           </div>
 
           {/* Group Field */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5 pl-1">
               Группа
             </label>
-            <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
-              <Users size={16} className="text-slate-500 flex-shrink-0" />
-              <input
-                type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="Группа A"
-                className="bg-transparent text-slate-200 text-sm w-full focus:outline-none placeholder-slate-650"
-              />
+            <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
+              <GroupPicker value={groupName} onChange={setGroupName} showSetDefault />
             </div>
           </div>
 
@@ -108,10 +102,7 @@ export function StudentFormModal({
               Текущая тема
             </label>
             <div className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
-              <TopicPicker
-                value={currentTopic}
-                onChange={setCurrentTopic}
-              />
+              <TopicPicker value={currentTopic} onChange={setCurrentTopic} />
             </div>
           </div>
 
@@ -133,7 +124,7 @@ export function StudentFormModal({
               Удалить
             </button>
           )}
-          
+
           <div className="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end">
             <button
               type="button"

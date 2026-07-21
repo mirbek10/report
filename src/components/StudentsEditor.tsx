@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import * as XLSX from 'xlsx';
 import { useStudents } from '../hooks/useStudents';
 import { TopicPicker } from './TopicPicker';
+import { GroupPicker, getAllGroups, getDefaultGroup } from './GroupPicker';
 import { StudentFormModal } from './StudentFormModal';
 import type { Student } from '../types';
 
@@ -43,8 +44,8 @@ function studentToRow(s: Student): Row {
   return { key: newKey(), id: s.id, name: s.name, groupName: s.groupName, currentTopic: s.currentTopic, dirty: false, saving: false, error: false };
 }
 
-function emptyRow(groupName = DEFAULT_GROUP): Row {
-  return { key: newKey(), name: '', groupName, currentTopic: DEFAULT_TOPIC, dirty: false, saving: false, error: false };
+function emptyRow(groupName?: string): Row {
+  return { key: newKey(), name: '', groupName: groupName ?? getDefaultGroup(), currentTopic: DEFAULT_TOPIC, dirty: false, saving: false, error: false };
 }
 
 /** Clean a name cell: remove ✅, trailing dashes, extra spaces */
@@ -70,7 +71,7 @@ function parseXlsx(file: File): Promise<XlsxPreviewRow[]> {
           .map((row) => ({
             name: cleanName(row[0]),
             phone: row[1] != null ? String(row[1]).trim() : '',
-            groupName: DEFAULT_GROUP,
+            groupName: getDefaultGroup(),
             currentTopic: DEFAULT_TOPIC,
             selected: true,
           }))
@@ -97,6 +98,46 @@ function downloadTemplate() {
   XLSX.writeFile(wb, 'students_template.xlsx');
 }
 
+/** Export all students to .xlsx */
+function exportStudents(students: Student[]) {
+  const wb = XLSX.utils.book_new();
+
+  // Group students by groupName
+  const groups = [...new Set(students.map((s) => s.groupName || 'Без группы'))].sort();
+
+  // Sheet 1: all students
+  const allRows: (string | number)[][] = [
+    ['#', 'Имя студента', 'Группа', 'Текущая тема', 'Всего посещений'],
+    ...students.map((s, i) => [
+      i + 1,
+      s.name,
+      s.groupName || 'Без группы',
+      s.currentTopic || '',
+      s.come.length,
+    ]),
+  ];
+  const wsAll = XLSX.utils.aoa_to_sheet(allRows);
+  wsAll['!cols'] = [{ wch: 4 }, { wch: 28 }, { wch: 16 }, { wch: 24 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsAll, 'Все студенты');
+
+  // One sheet per group
+  for (const group of groups) {
+    const gs = students.filter((s) => (s.groupName || 'Без группы') === group);
+    const rows: (string | number)[][] = [
+      ['#', 'Имя студента', 'Текущая тема', 'Всего посещений'],
+      ...gs.map((s, i) => [i + 1, s.name, s.currentTopic || '', s.come.length]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 4 }, { wch: 28 }, { wch: 24 }, { wch: 14 }];
+    // Sheet name max 31 chars, sanitize
+    const sheetName = group.replace(/[:\\/?*\[\]]/g, '').slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  const date = new Date().toLocaleDateString('ru-RU').replace(/\./g, '-');
+  XLSX.writeFile(wb, `students-${date}.xlsx`);
+}
+
 // ─── XlsxImportModal ──────────────────────────────────────────────────────────
 interface XlsxImportModalProps {
   rows: XlsxPreviewRow[];
@@ -111,8 +152,9 @@ function XlsxImportModal({ rows, existingNames, onClose, onConfirm, isSaving, pr
   const [preview, setPreview] = useState<XlsxPreviewRow[]>(() =>
     rows.map((r) => ({ ...r, selected: !existingNames.has(r.name.toLowerCase()) }))
   );
-  const [groupAll, setGroupAll] = useState(DEFAULT_GROUP);
+  const [groupAll, setGroupAll] = useState(() => getDefaultGroup());
   const [topicAll, setTopicAll] = useState(DEFAULT_TOPIC);
+  const [groupOptions, setGroupOptions] = useState<string[]>(getAllGroups);
 
   const toggleRow = (i: number) =>
     setPreview((p) => p.map((r, idx) => idx === i ? { ...r, selected: !r.selected } : r));
@@ -156,8 +198,8 @@ function XlsxImportModal({ rows, existingNames, onClose, onConfirm, isSaving, pr
           </div>
           <div className="flex items-center gap-1.5 ml-auto flex-wrap gap-y-2">
             <select value={groupAll} onChange={(e) => setGroupAll(e.target.value)}
-              className="bg-slate-800 border border-slate-750 text-slate-350 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]">
-              {['Группа A','Группа B','Группа C','Группа D','Группа E'].map((g) => (
+              className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]">
+              {groupOptions.map((g) => (
                 <option key={g}>{g}</option>
               ))}
             </select>
@@ -202,8 +244,13 @@ function XlsxImportModal({ rows, existingNames, onClose, onConfirm, isSaving, pr
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-500 font-mono">{row.phone}</td>
                     <td className="px-3 py-2">
-                      <input value={row.groupName} onChange={(e) => setPreview((p) => p.map((r, idx) => idx === i ? { ...r, groupName: e.target.value } : r))}
-                        className="w-28 bg-slate-800 border border-slate-750 text-slate-200 text-xs px-2.5 py-1 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                      <select
+                        value={row.groupName}
+                        onChange={(e) => setPreview((p) => p.map((r, idx) => idx === i ? { ...r, groupName: e.target.value } : r))}
+                        className="w-28 bg-slate-800 border border-slate-700 text-slate-200 text-xs px-2 py-1 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark]"
+                      >
+                        {groupOptions.map((g) => <option key={g} value={g}>{g}</option>)}
+                      </select>
                     </td>
                     <td className="px-3 py-2">
                       <select value={row.currentTopic} onChange={(e) => setPreview((p) => p.map((r, idx) => idx === i ? { ...r, currentTopic: e.target.value } : r))}
@@ -292,7 +339,7 @@ export function StudentsEditor() {
   }, [editStudent, addStudent, updateRow]);
 
   const addRow = useCallback(() => {
-    const lastGroup = rows.at(-1)?.groupName ?? DEFAULT_GROUP;
+    const lastGroup = rows.at(-1)?.groupName ?? getDefaultGroup();
     const row = emptyRow(lastGroup);
     setRows((prev) => [...prev, row]);
     setTimeout(() => inputRefs.current.get(row.key)?.focus(), 30);
@@ -320,7 +367,7 @@ export function StudentsEditor() {
   const handleBulkSave = useCallback(async () => {
     const names = bulkText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
     if (names.length === 0) return;
-    const lastGroup = rows.find((r) => r.id)?.groupName ?? DEFAULT_GROUP;
+    const lastGroup = rows.find((r) => r.id)?.groupName ?? getDefaultGroup();
     setBulkSaving(true);
     try {
       const res = await batchAddStudents.mutateAsync(names.map((name) => ({ name, groupName: lastGroup, currentTopic: DEFAULT_TOPIC, come: [] })));
@@ -418,13 +465,22 @@ export function StudentsEditor() {
         <div className="flex gap-2 flex-wrap w-full sm:w-auto">
           {/* Add Student Button (Mobile only) */}
           <button 
-            onClick={() => setEditingStudent({ name: '', groupName: rows.at(-1)?.groupName || DEFAULT_GROUP, currentTopic: DEFAULT_TOPIC, key: '' })}
+            onClick={() => setEditingStudent({ name: '', groupName: rows.at(-1)?.groupName || getDefaultGroup(), currentTopic: DEFAULT_TOPIC, key: '' })}
             className="flex-1 sm:hidden flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-650 hover:bg-indigo-600 text-white shadow-md transition-all"
           >
             <Plus size={13} />
             Добавить
           </button>
           
+          {/* Export students */}
+          <button
+            onClick={() => students && students.length > 0 && exportStudents(students)}
+            disabled={!students || students.length === 0}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-950/40 border border-indigo-900/40 text-indigo-400 hover:bg-indigo-900/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Скачать всех студентов .xlsx">
+            <Download size={13} />
+            <span>Выгрузить</span>
+          </button>
           {/* Download template */}
           <button onClick={downloadTemplate}
             className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-205 transition-colors"
@@ -506,10 +562,23 @@ export function StudentsEditor() {
                     className="w-full bg-transparent text-slate-105 text-sm px-2 py-1.5 rounded-lg focus:outline-none focus:bg-slate-950 focus:ring-1 focus:ring-indigo-500 placeholder-slate-700 transition-colors font-medium" />
                 </div>
                 <div className="px-1 py-1">
-                  <input type="text" value={row.groupName}
-                    onChange={(e) => updateRow(row.key, { groupName: e.target.value, dirty: true })}
-                    onBlur={() => { if (row.dirty && row.name.trim()) saveRow(row); }}
-                    className="w-full bg-transparent text-slate-350 text-xs px-2 py-1.5 rounded-lg focus:outline-none focus:bg-slate-950 focus:ring-1 focus:ring-indigo-500 transition-colors font-medium" />
+                  <GroupPicker
+                    value={row.groupName}
+                    onChange={(group) => {
+                      updateRow(row.key, { groupName: group, dirty: true });
+                      if (row.id) {
+                        setTimeout(() => {
+                          setRows((prev) => {
+                            const r = prev.find((x) => x.key === row.key);
+                            if (r) saveRow({ ...r, groupName: group, dirty: true });
+                            return prev;
+                          });
+                        }, 0);
+                      }
+                    }}
+                    compact
+                    showSetDefault
+                  />
                 </div>
                 <div className="px-1 py-1">
                   <TopicPicker
