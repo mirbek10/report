@@ -1,14 +1,17 @@
-import { useState, useMemo } from 'react';
-import { BarChart2, Copy, FileText, Download, Check, ChevronDown } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { BarChart2, Copy, FileText, Download, Check, ChevronDown, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { computePeriodStats, copyToClipboard, generateDailyReport, dateRange } from '../utils/analytics';
 import { fmtDMY, parseDMY, todayDMY } from '../utils/dates';
 import { DateBar } from './DateBar';
+import { getDefaultGroup } from './GroupPicker';
 import type { Student } from '../types';
 
 type Period = 'day' | 'week' | 'month' | 'custom';
 type StudentFilter = 'all' | 'visited' | 'absent';
 type StudentSort = 'visits' | 'name' | 'lastVisit';
+
+const ALL_GROUPS = '__all__';
 
 interface Props {
   students: Student[];
@@ -77,6 +80,56 @@ function generatePeriodReport(students: Student[], dates: string[], label: strin
   ].join('\n');
 }
 
+/** Monthly full report — all groups summary + per-group breakdown */
+function generateMonthlyAllGroupsReport(students: Student[], dates: string[], label: string): string {
+  const dateSet = new Set(dates);
+
+  // gather unique groups
+  const groupNames = [...new Set(students.map((s) => s.groupName || 'Без группы'))].sort();
+
+  const totalVisits = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
+  const onlineVisits = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
+  const offlineVisits = totalVisits - onlineVisits;
+  const uniqueVisited = students.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
+
+  const lines: string[] = [
+    `📅 Айлык отчёт: ${label}`,
+    ``,
+    `Жалпы студент: ${students.length}`,
+    `Жалпы сабак: ${totalVisits} (📍 ${offlineVisits} оффлайн, 🌐 ${onlineVisits} онлайн)`,
+    `Уникалдуу келгендер: ${uniqueVisited} / ${students.length}`,
+    ``,
+    `── Группалар боюнча ──────────────────`,
+  ];
+
+  for (const group of groupNames) {
+    const gs = students.filter((s) => (s.groupName || 'Без группы') === group);
+    const gVisits = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
+    const gVisited = gs.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
+    const gOnline = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
+    const gOffline = gVisits - gOnline;
+    lines.push(``, `📌 ${group} (${gs.length} студент)`);
+    lines.push(`   Келди: ${gVisited} / ${gs.length}  |  Сабак: ${gVisits} (📍${gOffline} 🌐${gOnline})`);
+
+    const active = gs
+      .map((s) => ({ s, cnt: s.come.filter((e) => dateSet.has(e.date)).length }))
+      .filter((x) => x.cnt > 0)
+      .sort((a, b) => b.cnt - a.cnt);
+    active.forEach(({ s, cnt }, i) => {
+      const on = s.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length;
+      const off = cnt - on;
+      const detail = [off > 0 && `📍${off}`, on > 0 && `🌐${on}`].filter(Boolean).join(' ');
+      lines.push(`   ${i + 1}. ${s.name} — ${cnt} жолу (${detail})`);
+    });
+    const absent = gs.filter((s) => !s.come.some((e) => dateSet.has(e.date)));
+    if (absent.length > 0) {
+      lines.push(`   ❌ Келбегендер: ${absent.map((s) => s.name).join(', ')}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function exportCSV(students: Student[], dates: string[], filename: string) {
   const dateSet = new Set(dates);
   const rows = [['Имя', 'Тема', 'Всего визитов', 'Оффлайн', 'Онлайн', 'Первый визит', 'Последний визит', 'Ср. длит. (мин)']];
@@ -115,11 +168,36 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
   const [customTo, setCustomTo] = useState(todayDMY);
   const [studentFilter, setStudentFilter] = useState<StudentFilter>('all');
   const [studentSort, setStudentSort] = useState<StudentSort>('visits');
+  const [selectedGroup, setSelectedGroup] = useState<string>(ALL_GROUPS);
   const [copiedList, setCopiedList] = useState(false);
   const [copiedReport, setCopiedReport] = useState(false);
 
   const weekOptions = useMemo(() => getWeekOptions(), []);
   const monthOptions = useMemo(() => getMonthOptions(), []);
+
+  // All unique groups from students
+  const groupOptions = useMemo(() => {
+    const gs = [...new Set(students.map((s) => s.groupName || 'Без группы'))].sort();
+    return gs;
+  }, [students]);
+
+  // Auto-select default group once groupOptions are known
+  const [defaultApplied, setDefaultApplied] = useState(false);
+  useEffect(() => {
+    if (!defaultApplied && groupOptions.length > 0) {
+      const def = getDefaultGroup();
+      if (def && groupOptions.includes(def)) {
+        setSelectedGroup(def);
+      }
+      setDefaultApplied(true);
+    }
+  }, [groupOptions, defaultApplied]);
+
+  // For month — always show all; for others — filter by selected group
+  const activeStudents = useMemo(() => {
+    if (period === 'month' || selectedGroup === ALL_GROUPS) return students;
+    return students.filter((s) => (s.groupName || 'Без группы') === selectedGroup);
+  }, [students, period, selectedGroup]);
 
   const { dates, periodLabel } = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -141,7 +219,19 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
     return { dates: [], periodLabel: 'Период' };
   }, [period, dayDate, weekIdx, monthIdx, customFrom, customTo, weekOptions, monthOptions]);
 
-  const stats = useMemo(() => computePeriodStats(students, dates), [students, dates]);
+  const stats = useMemo(() => computePeriodStats(activeStudents, dates), [activeStudents, dates]);
+
+  // Group summary for month tab
+  const groupSummary = useMemo(() => {
+    if (period !== 'month') return null;
+    const dateSet = new Set(dates);
+    return groupOptions.map((g) => {
+      const gs = students.filter((s) => (s.groupName || 'Без группы') === g);
+      const visited = gs.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
+      const total = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
+      return { group: g, count: gs.length, visited, total };
+    });
+  }, [period, dates, students, groupOptions]);
 
   const filteredStudents = useMemo(() => {
     let list = stats.studentStats;
@@ -162,28 +252,50 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
 
   const handleCopyList = async () => {
     if (period === 'day') {
-      const present = students
+      const present = activeStudents
         .map((s) => ({ s, e: s.come.find((e) => e.date === dayDate) }))
         .filter((x): x is { s: Student; e: NonNullable<typeof x.e> } => !!x.e)
         .sort((a, b) => a.e.time_start.localeCompare(b.e.time_start));
+      const groupLabel = selectedGroup !== ALL_GROUPS ? ` (${selectedGroup})` : '';
       const lines = present.length === 0
-        ? [`${dayDate} — никого не отмечено`]
-        : [`Дата: ${dayDate}`, `Присутствовали (${present.length}/${students.length}):`,
+        ? [`${dayDate}${groupLabel} — никого не отмечено`]
+        : [`Дата: ${dayDate}${groupLabel}`, `Присутствовали (${present.length}/${activeStudents.length}):`,
            ...present.map(({ s, e }, i) => `${i + 1}. ${s.name} — ${e.time_start}–${e.time_finish} (${s.currentTopic})`)];
+      await copyToClipboard(lines.join('\n'));
+    } else if (period === 'month') {
+      // Month: full group-by-group summary
+      const dateSet = new Set(dates);
+      const lines = [
+        `Период: ${periodLabel}`,
+        `Жалпы студент: ${students.length}`,
+        '',
+        ...groupOptions.map((g) => {
+          const gs = students.filter((s) => (s.groupName || 'Без группы') === g);
+          const visited = gs.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
+          const total = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
+          return `${g}: ${visited}/${gs.length} студент (${total} сабак)`;
+        }),
+      ];
       await copyToClipboard(lines.join('\n'));
     } else {
       const visited = stats.studentStats.filter((s) => s.visitCount > 0).sort((a, b) => b.visitCount - a.visitCount);
-      await copyToClipboard([`Период: ${periodLabel}`, `Посещений: ${stats.totalVisits}`,
-        `Студентов: ${visited.length}/${students.length}`, '',
+      const groupLabel = selectedGroup !== ALL_GROUPS ? ` · ${selectedGroup}` : '';
+      await copyToClipboard([`Период: ${periodLabel}${groupLabel}`, `Посещений: ${stats.totalVisits}`,
+        `Студентов: ${visited.length}/${activeStudents.length}`, '',
         ...visited.map((s, i) => `${i + 1}. ${s.student.name} — ${s.visitCount} раз`)].join('\n'));
     }
     setCopiedList(true); setTimeout(() => setCopiedList(false), 2000);
   };
 
   const handleCopyReport = async () => {
-    const text = period === 'day'
-      ? generateDailyReport(students, dayDate, mentorName)
-      : generatePeriodReport(students, dates, periodLabel);
+    let text: string;
+    if (period === 'month') {
+      text = generateMonthlyAllGroupsReport(students, dates, periodLabel);
+    } else if (period === 'day') {
+      text = generateDailyReport(activeStudents, dayDate, mentorName);
+    } else {
+      text = generatePeriodReport(activeStudents, dates, periodLabel);
+    }
     await copyToClipboard(text);
     setCopiedReport(true); setTimeout(() => setCopiedReport(false), 2000);
   };
@@ -208,14 +320,42 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
             </button>
           ))}
         </div>
-        {period === 'day' && <DateBar selectedDate={dayDate} onDateChange={setDayDate} />}
+        {period === 'day' && (
+          <div className="flex flex-col gap-2">
+            <DateBar selectedDate={dayDate} onDateChange={setDayDate} />
+            {groupOptions.length > 1 && (
+              <div className="relative w-full sm:w-auto">
+                <Users size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
+                  className="w-full sm:w-64 appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-8 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
+                  <option value={ALL_GROUPS}>Все группы</option>
+                  {groupOptions.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+          </div>
+        )}
         {period === 'week' && (
-          <div className="relative inline-block w-full sm:w-auto">
-            <select value={weekIdx} onChange={(e) => setWeekIdx(Number(e.target.value))}
-              className="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-4 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
-              {weekOptions.map((w, i) => <option key={i} value={i}>{w.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 sm:flex-initial">
+              <select value={weekIdx} onChange={(e) => setWeekIdx(Number(e.target.value))}
+                className="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-4 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
+                {weekOptions.map((w, i) => <option key={i} value={i}>{w.label}</option>)}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+            {groupOptions.length > 1 && (
+              <div className="relative flex-1 sm:flex-initial">
+                <Users size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
+                  className="w-full sm:w-auto appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-8 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
+                  <option value={ALL_GROUPS}>Все группы</option>
+                  {groupOptions.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            )}
           </div>
         )}
         {period === 'month' && (
@@ -228,19 +368,32 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
           </div>
         )}
         {period === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap w-full">
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-              <span className="text-slate-500 text-xs font-semibold uppercase w-4 text-center">С</span>
-              <input type="date" value={dmyToInput(customFrom)}
-                onChange={(e) => { if (e.target.value) setCustomFrom(inputToDmy(e.target.value)); }}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-350 rounded-xl px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer" />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 flex-wrap w-full">
+              <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+                <span className="text-slate-500 text-xs font-semibold uppercase w-4 text-center">С</span>
+                <input type="date" value={dmyToInput(customFrom)}
+                  onChange={(e) => { if (e.target.value) setCustomFrom(inputToDmy(e.target.value)); }}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-350 rounded-xl px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer" />
+              </div>
+              <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+                <span className="text-slate-500 text-xs font-semibold uppercase w-4 text-center">по</span>
+                <input type="date" value={dmyToInput(customTo)}
+                  onChange={(e) => { if (e.target.value) setCustomTo(inputToDmy(e.target.value)); }}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-350 rounded-xl px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer" />
+              </div>
             </div>
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-              <span className="text-slate-500 text-xs font-semibold uppercase w-4 text-center">по</span>
-              <input type="date" value={dmyToInput(customTo)}
-                onChange={(e) => { if (e.target.value) setCustomTo(inputToDmy(e.target.value)); }}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-350 rounded-xl px-3 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer" />
-            </div>
+            {groupOptions.length > 1 && (
+              <div className="relative w-full sm:w-auto">
+                <Users size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}
+                  className="w-full sm:w-64 appearance-none bg-slate-900 border border-slate-800 text-slate-200 rounded-xl pl-8 pr-10 py-2.5 sm:py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark] font-semibold cursor-pointer">
+                  <option value={ALL_GROUPS}>Все группы</option>
+                  {groupOptions.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -255,11 +408,44 @@ export function ReportsContent({ students, mentorName = 'Ментор' }: Props)
         <StatCard label="Онлайн" value={stats.onlineVisits} accent="text-sky-400" icon="🌐" />
       </div>
 
+      {/* Month: groups summary */}
+      {period === 'month' && groupSummary && groupSummary.length > 1 && (
+        <section>
+          <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
+            <Users size={15} className="text-indigo-400" />По группам
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {groupSummary.map(({ group, count, visited, total }) => {
+              const pct = count > 0 ? Math.round(visited / count * 100) : 0;
+              return (
+                <div key={group} className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-200 text-sm font-semibold truncate">{group}</span>
+                    <span className="text-xs text-slate-500 font-mono flex-shrink-0">{count} студ.</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs text-slate-400 w-8 text-right font-mono">{pct}%</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <span><span className="text-emerald-400 font-medium">{visited}</span> / {count} пришли</span>
+                    <span className="text-slate-700">·</span>
+                    <span><span className="text-indigo-400 font-medium">{total}</span> сабак</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Copy / Export */}
       <div className="flex gap-2 flex-wrap">
         <ActionBtn onClick={handleCopyList} copied={copiedList} icon={<Copy size={13} />} label="Скопировать список" color="slate" />
         <ActionBtn onClick={handleCopyReport} copied={copiedReport} icon={<FileText size={13} />} label="Скопировать отчёт" color="indigo" />
-        <button onClick={() => exportCSV(students, dates, `report-${periodLabel.replace(/[\s–]+/g, '-')}.csv`)}
+        <button onClick={() => exportCSV(activeStudents, dates, `report-${periodLabel.replace(/[\s–]+/g, '-')}.csv`)}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
           <Download size={13} />Скачать CSV
         </button>
