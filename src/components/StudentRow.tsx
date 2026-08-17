@@ -9,9 +9,9 @@ interface StudentRowProps {
   student: Student;
   index: number;
   come: ComeEntry | undefined;
-  onArrive: (studentId: string, time_start: string, time_finish: string, lesson_type: LessonType) => void;
+  onArrive: (studentId: string, time_start: string, time_finish: string, lesson_type: LessonType) => Promise<void> | void;
   onUnmark: (studentId: string) => void;
-  onTopicChange: (studentId: string, topic: string) => void;
+  onTopicChange: (studentId: string, topic: string) => Promise<void> | void;
   onTimeEdit: (studentId: string, field: 'time_start' | 'time_finish', value: string) => void;
   onLessonTypeChange: (studentId: string, lesson_type: LessonType) => void;
 }
@@ -23,12 +23,12 @@ export function StudentRow({
   const isPresent = !!come;
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleModalSave = (entry: ComeEntry | null) => {
+  const handleModalSave = async (entry: ComeEntry | null) => {
     if (entry === null) {
       onUnmark(student.id);
     } else {
       if (!isPresent) {
-        onArrive(student.id, entry.time_start, entry.time_finish, entry.lesson_type);
+        await onArrive(student.id, entry.time_start, entry.time_finish, entry.lesson_type);
       } else {
         if (entry.time_start !== come.time_start) {
           onTimeEdit(student.id, 'time_start', entry.time_start);

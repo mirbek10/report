@@ -24,14 +24,30 @@ function saveCustomGroups(groups: string[]) {
   catch (err) { console.warn('Failed to save custom groups:', err); }
 }
 
-export function getDefaultGroup(): string {
-  try { return localStorage.getItem(LS_DEFAULT_KEY) || DEFAULT_GROUPS[0]; }
-  catch { return DEFAULT_GROUPS[0]; }
+export function getDefaultGroups(): string[] {
+  try {
+    const raw = localStorage.getItem(LS_DEFAULT_KEY);
+    if (!raw) return [DEFAULT_GROUPS[0]];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((g: unknown) => typeof g === 'string');
+    if (typeof parsed === 'string') return [parsed];
+    return [DEFAULT_GROUPS[0]];
+  } catch {
+    return [DEFAULT_GROUPS[0]];
+  }
 }
 
-export function setDefaultGroup(group: string) {
-  try { localStorage.setItem(LS_DEFAULT_KEY, group); }
-  catch (err) { console.warn('Failed to save default group:', err); }
+export function setDefaultGroups(groups: string[]) {
+  try { localStorage.setItem(LS_DEFAULT_KEY, JSON.stringify(groups)); }
+  catch (err) { console.warn('Failed to save default groups:', err); }
+}
+
+export function toggleDefaultGroup(group: string) {
+  const current = getDefaultGroups();
+  const next = current.includes(group)
+    ? current.filter((g) => g !== group)
+    : [...current, group];
+  setDefaultGroups(next.length > 0 ? next : [DEFAULT_GROUPS[0]]);
 }
 
 export function addCustomGroup(group: string) {
@@ -54,29 +70,25 @@ interface GroupPickerProps {
   value: string;
   onChange: (group: string) => void;
   disabled?: boolean;
-  /** compact = inline button for table rows */
   compact?: boolean;
-  /** show star button to set as default group */
   showSetDefault?: boolean;
 }
 
 export function GroupPicker({ value, onChange, disabled, compact, showSetDefault }: GroupPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  // Keep both in state so updates are reactive
   const [allGroups, setAllGroups] = useState<string[]>(getAllGroups);
   const [customGroups, setCustomGroups] = useState<string[]>(loadCustomGroups);
-  const [defaultGroup, setDefaultGroupState] = useState<string>(getDefaultGroup);
+  const [defaultGroups, setDefaultGroupsState] = useState<string[]>(getDefaultGroups);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Refresh when re-opening in case another picker made changes
   const refreshGroups = () => {
     const custom = loadCustomGroups();
     setCustomGroups(custom);
     setAllGroups([...new Set([...custom, ...DEFAULT_GROUPS])]);
-    setDefaultGroupState(getDefaultGroup());
+    setDefaultGroupsState(getDefaultGroups());
   };
 
   const filtered = query.trim()
@@ -119,18 +131,19 @@ export function GroupPicker({ value, onChange, disabled, compact, showSetDefault
     const custom = loadCustomGroups();
     setCustomGroups(custom);
     setAllGroups([...new Set([...custom, ...DEFAULT_GROUPS])]);
-    // If deleted group was default, reset default
-    if (getDefaultGroup() === group) {
-      setDefaultGroup(DEFAULT_GROUPS[0]);
-      setDefaultGroupState(DEFAULT_GROUPS[0]);
+    const defaults = getDefaultGroups();
+    if (defaults.includes(group)) {
+      const next = defaults.filter((g) => g !== group);
+      setDefaultGroups(next.length > 0 ? next : [DEFAULT_GROUPS[0]]);
+      setDefaultGroupsState(next.length > 0 ? next : [DEFAULT_GROUPS[0]]);
     }
     if (value === group) onChange(DEFAULT_GROUPS[0]);
   }, [value, onChange]);
 
-  const handleSetDefault = useCallback((group: string, e: React.MouseEvent) => {
+  const handleToggleDefault = useCallback((group: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setDefaultGroup(group);
-    setDefaultGroupState(group);
+    toggleDefaultGroup(group);
+    setDefaultGroupsState(getDefaultGroups());
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -141,7 +154,6 @@ export function GroupPicker({ value, onChange, disabled, compact, showSetDefault
     if (e.key === 'Escape') setOpen(false);
   };
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -175,12 +187,12 @@ export function GroupPicker({ value, onChange, disabled, compact, showSetDefault
             filtered={filtered}
             canCreate={canCreate}
             customGroups={customGroups}
-            defaultGroup={defaultGroup}
+            defaultGroups={defaultGroups}
             inputRef={inputRef}
             onSelect={handleSelect}
             onCreate={handleCreate}
             onDelete={handleDelete}
-            onSetDefault={showSetDefault ? handleSetDefault : undefined}
+            onToggleDefault={showSetDefault ? handleToggleDefault : undefined}
             onKeyDown={handleKeyDown}
             onClose={() => setOpen(false)}
             alignRight={false}
@@ -190,7 +202,6 @@ export function GroupPicker({ value, onChange, disabled, compact, showSetDefault
     );
   }
 
-  // Full size — for StudentFormModal
   return (
     <div ref={containerRef} className="relative w-full">
       <button
@@ -209,12 +220,12 @@ export function GroupPicker({ value, onChange, disabled, compact, showSetDefault
           filtered={filtered}
           canCreate={canCreate}
           customGroups={customGroups}
-          defaultGroup={defaultGroup}
+          defaultGroups={defaultGroups}
           inputRef={inputRef}
           onSelect={handleSelect}
           onCreate={handleCreate}
           onDelete={handleDelete}
-          onSetDefault={showSetDefault ? handleSetDefault : undefined}
+          onToggleDefault={showSetDefault ? handleToggleDefault : undefined}
           onKeyDown={handleKeyDown}
           onClose={() => setOpen(false)}
           alignRight={false}
@@ -231,27 +242,26 @@ interface DropdownProps {
   filtered: string[];
   canCreate: boolean;
   customGroups: string[];
-  defaultGroup: string;
+  defaultGroups: string[];
   inputRef: React.RefObject<HTMLInputElement | null>;
   onSelect: (g: string) => void;
   onCreate: () => void;
   onDelete: (g: string, e: React.MouseEvent) => void;
-  onSetDefault?: (g: string, e: React.MouseEvent) => void;
+  onToggleDefault?: (g: string, e: React.MouseEvent) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onClose: () => void;
   alignRight: boolean;
 }
 
 function GroupDropdown({
-  query, setQuery, filtered, canCreate, customGroups, defaultGroup,
-  inputRef, onSelect, onCreate, onDelete, onSetDefault, onKeyDown, onClose, alignRight,
+  query, setQuery, filtered, canCreate, customGroups, defaultGroups,
+  inputRef, onSelect, onCreate, onDelete, onToggleDefault, onKeyDown, onClose, alignRight,
 }: DropdownProps) {
   return (
     <div className={clsx(
       'absolute top-full mt-1 z-30 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-64',
       alignRight ? 'right-0' : 'left-0'
     )}>
-      {/* Search / create input */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800">
         <Search size={13} className="text-slate-500 flex-shrink-0" />
         <input
@@ -270,9 +280,7 @@ function GroupDropdown({
         )}
       </div>
 
-      {/* List */}
       <div className="max-h-56 overflow-y-auto scrollbar-thin py-1">
-        {/* Create new */}
         {canCreate && (
           <button
             onClick={onCreate}
@@ -289,7 +297,7 @@ function GroupDropdown({
 
         {filtered.map((group) => {
           const isCustom = customGroups.includes(group);
-          const isDefault = group === defaultGroup;
+          const isDefault = defaultGroups.includes(group);
           return (
             <div key={group} className="group/item flex items-center">
               <button
@@ -312,19 +320,19 @@ function GroupDropdown({
                 </div>
               </button>
 
-              {/* Action buttons shown on hover */}
               <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-all pr-1 gap-0.5">
-                {/* Set as default */}
-                {onSetDefault && !isDefault && (
+                {onToggleDefault && (
                   <button
-                    onClick={(e) => onSetDefault(group, e)}
-                    className="p-1.5 text-slate-600 hover:text-amber-400 transition-colors rounded"
-                    title="Сделать основной"
+                    onClick={(e) => onToggleDefault(group, e)}
+                    className={clsx(
+                      'p-1.5 rounded transition-colors',
+                      isDefault ? 'text-amber-400 hover:text-amber-300' : 'text-slate-600 hover:text-amber-400'
+                    )}
+                    title={isDefault ? 'Убрать из основных' : 'Сделать основной'}
                   >
-                    <Star size={11} />
+                    <Star size={11} fill={isDefault ? 'currentColor' : 'none'} />
                   </button>
                 )}
-                {/* Delete custom group */}
                 {isCustom && (
                   <button
                     onClick={(e) => onDelete(group, e)}
@@ -342,9 +350,9 @@ function GroupDropdown({
 
       <div className="px-3 py-1.5 border-t border-slate-800 flex items-center justify-between">
         <span className="text-xs text-slate-700">{filtered.length} групп</span>
-        {onSetDefault && (
+        {onToggleDefault && (
           <span className="text-[10px] text-slate-700">
-            <Star size={9} className="inline mr-0.5 text-amber-700" />— основная по умолчанию
+            <Star size={9} className="inline mr-0.5 text-amber-700" />— основные
           </span>
         )}
         <button onClick={onClose} className="text-xs text-slate-600 hover:text-slate-400">Закрыть</button>

@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+﻿import { useState, useMemo, useEffect } from 'react';
 import { BarChart2, Copy, FileText, Download, Check, ChevronDown, Users, Settings2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { computePeriodStats, copyToClipboard, generateDailyReport, dateRange } from '../utils/analytics';
 import { fmtDMY, parseDMY, todayDMY } from '../utils/dates';
+import { buildMonthlyReportBlob, buildMonthlyReportData, buildMonthlyReportText } from '../utils/monthlyReport';
 import { DateBar } from './DateBar';
-import { getDefaultGroup } from './GroupPicker';
+import { getDefaultGroups } from './GroupPicker';
 import { GroupManagerModal } from './GroupManagerModal';
 import type { Student } from '../types';
 
@@ -82,52 +83,8 @@ function generatePeriodReport(students: Student[], dates: string[], label: strin
   ].join('\n');
 }
 
-/** Monthly full report — all groups summary + per-group breakdown */
 function generateMonthlyAllGroupsReport(students: Student[], dates: string[], label: string): string {
-  const dateSet = new Set(dates);
-
-  // gather unique groups
-  const groupNames = [...new Set(students.map((s) => s.groupName || 'Без группы'))].sort();
-
-  const totalVisits = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
-  const onlineVisits = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
-  const offlineVisits = totalVisits - onlineVisits;
-  const uniqueVisited = students.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
-
-  const lines: string[] = [
-    `📅 Айлык отчёт: ${label}`,
-    ``,
-    `Жалпы студент: ${students.length}`,
-    `Жалпы сабак: ${totalVisits} (📍 ${offlineVisits} оффлайн, 🌐 ${onlineVisits} онлайн)`,
-    `Уникалдуу келгендер: ${uniqueVisited} / ${students.length}`,
-    ``,
-    `── Группалар боюнча ──────────────────`,
-  ];
-
-  for (const group of groupNames) {
-    const gs = students.filter((s) => (s.groupName || 'Без группы') === group);
-    const gVisits = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
-    const gVisited = gs.filter((s) => s.come.some((e) => dateSet.has(e.date))).length;
-    // Skip groups where nobody came
-    if (gVisited === 0) continue;
-    const gOnline = gs.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
-    const gOffline = gVisits - gOnline;
-    lines.push(``, `📌 ${group} (${gs.length} студент)`);
-    lines.push(`   Келди: ${gVisited} / ${gs.length}  |  Сабак: ${gVisits} (📍${gOffline} 🌐${gOnline})`);
-
-    const active = gs
-      .map((s) => ({ s, cnt: s.come.filter((e) => dateSet.has(e.date)).length }))
-      .filter((x) => x.cnt > 0)
-      .sort((a, b) => b.cnt - a.cnt);
-    active.forEach(({ s, cnt }, i) => {
-      const on = s.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length;
-      const off = cnt - on;
-      const detail = [off > 0 && `📍${off}`, on > 0 && `🌐${on}`].filter(Boolean).join(' ');
-      lines.push(`   ${i + 1}. ${s.name} — ${cnt} жолу (${detail})`);
-    });
-  }
-
-  return lines.join('\n');
+  return buildMonthlyReportText(buildMonthlyReportData(students, dates, label, 'Ментор', getDefaultGroups()));
 }
 
 function exportCSV(students: Student[], dates: string[], filename: string) {
@@ -172,37 +129,32 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
   const [copiedList, setCopiedList] = useState(false);
   const [copiedReport, setCopiedReport] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
-  const [defaultGroup, setDefaultGroupState] = useState(getDefaultGroup);
+  const [defaultGroups, setDefaultGroupsState] = useState<string[]>(getDefaultGroups);
 
   const weekOptions = useMemo(() => getWeekOptions(), []);
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
-  // All unique groups from students
   const groupOptions = useMemo(() => {
     const gs = [...new Set(students.map((s) => s.groupName || 'Без группы'))].sort();
     return gs;
   }, [students]);
 
-  // Auto-select default group once groupOptions are known
   const [defaultApplied, setDefaultApplied] = useState(false);
   useEffect(() => {
     if (!defaultApplied && groupOptions.length > 0) {
-      const def = getDefaultGroup();
-      if (def && groupOptions.includes(def)) {
-        setSelectedGroup(def);
-      }
+      const defs = getDefaultGroups();
+      const first = defs.find((d) => groupOptions.includes(d));
+      if (first) setSelectedGroup(first);
       setDefaultApplied(true);
     }
   }, [groupOptions, defaultApplied]);
 
-  // Refresh defaultGroup when group manager closes
   useEffect(() => {
     if (!showGroupManager) {
-      setDefaultGroupState(getDefaultGroup());
+      setDefaultGroupsState(getDefaultGroups());
     }
   }, [showGroupManager]);
 
-  // For month — always show all; for others — filter by selected group
   const activeStudents = useMemo(() => {
     if (period === 'month' || selectedGroup === ALL_GROUPS) return students;
     return students.filter((s) => (s.groupName || 'Без группы') === selectedGroup);
@@ -230,15 +182,21 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
 
   const stats = useMemo(() => computePeriodStats(activeStudents, dates), [activeStudents, dates]);
 
-  // Count of students in the default (main) group for the stats card
   const mainGroupStudentCount = useMemo(() => {
-    const def = defaultGroup;
-    if (!def) return students.length;
-    const count = students.filter((s) => (s.groupName || '') === def).length;
-    return count > 0 ? count : students.length;
-  }, [students, defaultGroup]);
+    const defs = defaultGroups;
+    if (defs.length === 0) return students.length;
+    return students.filter((s) => {
+      const g = s.groupName || '';
+      return defs.includes(g);
+    }).length;
+  }, [students, defaultGroups]);
 
-  // Group summary for month tab
+  const mainGroupsLabel = useMemo(() => {
+    if (defaultGroups.length === 0) return '';
+    if (defaultGroups.length === 1) return defaultGroups[0];
+    return defaultGroups.join(', ');
+  }, [defaultGroups]);
+
   const groupSummary = useMemo(() => {
     if (period !== 'month') return null;
     const dateSet = new Set(dates);
@@ -249,6 +207,11 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
       return { group: g, count: gs.length, visited, total };
     });
   }, [period, dates, students, groupOptions]);
+
+  const monthlyReportData = useMemo(() => {
+    if (period !== 'month') return null;
+    return buildMonthlyReportData(students, dates, periodLabel, mentorName || 'Ментор', defaultGroups);
+  }, [period, students, dates, periodLabel, mentorName, defaultGroups]);
 
   const filteredStudents = useMemo(() => {
     let list = stats.studentStats;
@@ -280,7 +243,6 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
            ...present.map(({ s, e }, i) => `${i + 1}. ${s.name} — ${e.time_start}–${e.time_finish} (${s.currentTopic})`)];
       await copyToClipboard(lines.join('\n'));
     } else if (period === 'month') {
-      // Month: full group-by-group summary
       const dateSet = new Set(dates);
       const lines = [
         `Период: ${periodLabel}`,
@@ -307,14 +269,26 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
   const handleCopyReport = async () => {
     let text: string;
     if (period === 'month') {
-      text = generateMonthlyAllGroupsReport(students, dates, periodLabel);
+      text = monthlyReportData ? buildMonthlyReportText(monthlyReportData) : generateMonthlyAllGroupsReport(students, dates, periodLabel);
     } else if (period === 'day') {
-      text = generateDailyReport(activeStudents, dayDate, mentorName, getDefaultGroup());
+      text = generateDailyReport(activeStudents, dayDate, mentorName, defaultGroups);
     } else {
       text = generatePeriodReport(activeStudents, dates, periodLabel);
     }
     await copyToClipboard(text);
     setCopiedReport(true); setTimeout(() => setCopiedReport(false), 2000);
+  };
+
+  const handleDownloadWord = async () => {
+    if (!monthlyReportData) return;
+    const blob = await buildMonthlyReportBlob(monthlyReportData);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeLabel = periodLabel.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
+    a.href = url;
+    a.download = `monthly-report-${safeLabel}.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   function dmyToInput(dmy: string) { try { const [d, m, y] = dmy.split('.'); return `20${y}-${m}-${d}`; } catch { return ''; } }
@@ -323,14 +297,13 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
   return (
     <div className="flex flex-col gap-5 pb-10">
 
-      {/* Period selector */}
       <div className="sm:sticky sm:top-[96px] z-10 bg-slate-950/95 backdrop-blur-sm pt-2 pb-3 border-b border-slate-800/60">
         <div className="flex gap-1 mb-3 flex-wrap">
           {(['day','week','month','custom'] as Period[]).map((p) => (
             <button key={p} onClick={() => setPeriod(p)}
               className={clsx('flex-1 sm:flex-initial text-center px-4 py-2.5 sm:py-2 rounded-xl text-sm font-semibold transition-all border duration-200',
-                period === p 
-                  ? 'bg-indigo-655 border-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                period === p
+                  ? 'bg-indigo-655 border-indigo-600 text-white shadow-md shadow-indigo-600/10'
                   : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800')}
             >
               {p === 'day' ? 'День' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Период'}
@@ -415,10 +388,9 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
         )}
       </div>
 
-      {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard
-          label={defaultGroup ? `Студентов (${defaultGroup})` : 'Студентов'}
+          label={mainGroupsLabel ? `Студентов (${mainGroupsLabel})` : 'Студентов'}
           value={mainGroupStudentCount}
           accent="text-slate-100"
         />
@@ -429,7 +401,6 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
         <StatCard label="Онлайн" value={stats.onlineVisits} accent="text-sky-400" icon="🌐" />
       </div>
 
-      {/* Month: groups summary */}
       {period === 'month' && groupSummary && groupSummary.length > 1 && (
         <section>
           <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
@@ -462,10 +433,15 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
         </section>
       )}
 
-      {/* Copy / Export */}
       <div className="flex gap-2 flex-wrap items-center">
         <ActionBtn onClick={handleCopyList} copied={copiedList} icon={<Copy size={13} />} label="Скопировать список" color="slate" />
         <ActionBtn onClick={handleCopyReport} copied={copiedReport} icon={<FileText size={13} />} label="Скопировать отчёт" color="indigo" />
+        {period === 'month' && (
+          <button onClick={handleDownloadWord}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-emerald-900/30 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-800/40 transition-colors">
+            <Download size={13} />Скачать Word
+          </button>
+        )}
         <button onClick={() => exportCSV(activeStudents, dates, `report-${periodLabel.replace(/[\s–]+/g, '-')}.csv`)}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition-colors">
           <Download size={13} />Скачать CSV
@@ -476,7 +452,6 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
         </button>
       </div>
 
-      {/* Per-day table */}
       {stats.byDay.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
@@ -508,7 +483,7 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
                         <span className="text-emerald-500 text-xs font-medium">{day.offlineCount > 0 ? `📍 ${day.offlineCount}` : '—'}</span>
                       </td>
                       <td className="px-3 py-2.5 text-right hidden sm:table-cell">
-                        <span className="text-sky-400 text-xs font-medium">{day.onlineCount > 0 ? `🌐 ${day.onlineCount}` : '—'}</span>
+                        <span className="text-sky-400 text-xs font-medium">{day.onlineCount > 0 ? `🌐${day.onlineCount}` : '—'}</span>
                       </td>
                       <td className="px-4 py-2.5 text-right hidden sm:table-cell">
                         <div className="flex items-center justify-end gap-2">
@@ -528,7 +503,6 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
         </section>
       )}
 
-      {/* Student attendance table */}
       <section>
         <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
           <h3 className="text-sm font-semibold text-slate-300">Посещаемость студентов</h3>
@@ -607,14 +581,13 @@ export function ReportsContent({ students, mentorName = 'Ментор', onRename
         </div>
       </section>
 
-      {/* Group manager modal */}
       {showGroupManager && (
         <GroupManagerModal
           students={students}
           onClose={() => setShowGroupManager(false)}
           onRenameGroup={async (oldName, newName) => {
             await onRenameGroup(oldName, newName);
-            setDefaultGroupState(getDefaultGroup());
+            setDefaultGroupsState(getDefaultGroups());
           }}
         />
       )}

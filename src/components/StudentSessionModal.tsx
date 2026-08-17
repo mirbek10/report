@@ -9,8 +9,8 @@ interface StudentSessionModalProps {
   student: Student;
   come: ComeEntry | undefined;
   onClose: () => void;
-  onSave: (entry: ComeEntry | null) => void; // null means mark absent / delete entry
-  onTopicChange: (topic: string) => void;
+  onSave: (entry: ComeEntry | null) => Promise<void> | void; // null means mark absent / delete entry
+  onTopicChange: (topic: string) => Promise<void> | void;
 }
 
 const DEFAULT_DURATION = 30;
@@ -38,11 +38,11 @@ export function StudentSessionModal({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!markedPresent) {
-      onSave(null); // Mark as absent
+      await onSave(null); // Mark as absent
     } else {
-      onSave({
+      await onSave({
         date: come?.date || '', // date will be set by the parent component/mutation
         time_start: timeStart,
         time_finish: timeFinish,
@@ -51,7 +51,7 @@ export function StudentSessionModal({
     }
     // Update student topic if changed
     if (topic !== student.currentTopic) {
-      onTopicChange(topic);
+      await onTopicChange(topic);
     }
     onClose();
   };

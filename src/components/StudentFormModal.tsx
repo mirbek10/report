@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, GraduationCap, Trash2 } from 'lucide-react';
 import { TopicPicker } from './TopicPicker';
-import { GroupPicker, getDefaultGroup } from './GroupPicker';
+import { GroupPicker, getDefaultGroups } from './GroupPicker';
 
 interface StudentFormModalProps {
   student?: { id?: string; name: string; groupName: string; currentTopic: string };
@@ -19,7 +19,7 @@ export function StudentFormModal({
   const isEditing = !!student?.id;
 
   const [name, setName] = useState(student?.name || '');
-  const [groupName, setGroupName] = useState(student?.groupName || getDefaultGroup());
+  const [groupName, setGroupName] = useState(student?.groupName || getDefaultGroups()[0]);
   const [currentTopic, setCurrentTopic] = useState(student?.currentTopic || 'HTML & CSS');
   const [error, setError] = useState('');
 

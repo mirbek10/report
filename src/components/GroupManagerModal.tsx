@@ -1,15 +1,15 @@
 import { useState, useMemo } from 'react';
 import { X, Pencil, Check, Loader2, Star, Users, AlertTriangle } from 'lucide-react';
 import {
-  getAllGroups, loadCustomGroups, getDefaultGroup, setDefaultGroup,
+  getAllGroups, loadCustomGroups, getDefaultGroups, setDefaultGroups, toggleDefaultGroup,
   addCustomGroup,
 } from './GroupPicker';
 import type { Student } from '../types';
+import { clsx } from 'clsx';
 
 interface Props {
   students: Student[];
   onClose: () => void;
-  /** Called when a group is renamed — parent must bulk-update all affected students */
   onRenameGroup: (oldName: string, newName: string) => Promise<void>;
 }
 
@@ -24,7 +24,7 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [defaultGroup, setDefaultGroupState] = useState(getDefaultGroup);
+  const [defaultGroups, setDefaultGroupsState] = useState<string[]>(getDefaultGroups);
 
   const allGroups = useMemo((): GroupRow[] => {
     const custom = loadCustomGroups();
@@ -52,7 +52,6 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
     const newName = editValue.trim();
     if (!newName) { setError('Название не может быть пустым'); return; }
     if (newName === oldName) { cancelEdit(); return; }
-    // Check duplicate
     if (getAllGroups().includes(newName)) {
       setError(`Группа «${newName}» уже существует`);
       return;
@@ -61,16 +60,14 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
     setSaving(true);
     setError('');
     try {
-      // 1. Add new name to custom groups (if it's not already a built-in)
       addCustomGroup(newName);
-
-      // 2. Bulk rename all students in this group
       await onRenameGroup(oldName, newName);
 
-      // 3. Update default group if needed
-      if (getDefaultGroup() === oldName) {
-        setDefaultGroup(newName);
-        setDefaultGroupState(newName);
+      const defaults = getDefaultGroups();
+      if (defaults.includes(oldName)) {
+        const next = defaults.map((g) => g === oldName ? newName : g);
+        setDefaultGroups(next);
+        setDefaultGroupsState(next);
       }
 
       cancelEdit();
@@ -81,16 +78,15 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
     }
   };
 
-  const handleSetDefault = (group: string) => {
-    setDefaultGroup(group);
-    setDefaultGroupState(group);
+  const handleToggleDefault = (group: string) => {
+    toggleDefaultGroup(group);
+    setDefaultGroupsState(getDefaultGroups());
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop:blur-md flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
           <div>
             <h2 className="text-slate-100 font-bold text-base flex items-center gap-2">
@@ -106,16 +102,14 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
           </button>
         </div>
 
-        {/* List */}
         <div className="flex-1 overflow-y-auto max-h-[60vh] divide-y divide-slate-800/60">
           {allGroups.map(({ name, isCustom, studentCount }) => {
             const isEditing = editingGroup === name;
-            const isDefault = name === defaultGroup;
+            const isDefault = defaultGroups.includes(name);
 
             return (
               <div key={name} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-800/30 transition-colors">
                 {isEditing ? (
-                  /* Edit mode */
                   <div className="flex-1 flex flex-col gap-1.5">
                     <input
                       type="text"
@@ -140,7 +134,6 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
                     </div>
                   </div>
                 ) : (
-                  /* View mode */
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-slate-200 font-medium truncate">{name}</span>
@@ -159,7 +152,6 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
                   </div>
                 )}
 
-                {/* Action buttons */}
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {isEditing ? (
                     <>
@@ -181,17 +173,16 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
                     </>
                   ) : (
                     <>
-                      {/* Set as default */}
-                      {!isDefault && (
-                        <button
-                          onClick={() => handleSetDefault(name)}
-                          className="p-1.5 text-slate-600 hover:text-amber-400 rounded-lg hover:bg-slate-800 transition-colors"
-                          title="Сделать основной"
-                        >
-                          <Star size={14} />
-                        </button>
-                      )}
-                      {/* Rename */}
+                      <button
+                        onClick={() => handleToggleDefault(name)}
+                        className={clsx(
+                          'p-1.5 rounded-lg hover:bg-slate-800 transition-colors',
+                          isDefault ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'
+                        )}
+                        title={isDefault ? 'Убрать из основных' : 'Сделать основной'}
+                      >
+                        <Star size={14} fill={isDefault ? 'currentColor' : 'none'} />
+                      </button>
                       <button
                         onClick={() => startEdit(name)}
                         className="p-1.5 text-slate-600 hover:text-indigo-400 rounded-lg hover:bg-slate-800 transition-colors"
@@ -207,11 +198,10 @@ export function GroupManagerModal({ students, onClose, onRenameGroup }: Props) {
           })}
         </div>
 
-        {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-800 flex items-center justify-between bg-slate-900/60">
           <p className="text-xs text-slate-500">
             <Star size={10} className="inline text-amber-500 mr-1" />
-            Основная — подставляется по умолчанию в отчёт и новым студентам
+            Основные — подставляются по умолчанию в отчёт и новым студентам
           </p>
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded-xl hover:bg-slate-800 transition-colors">
             Закрыть
