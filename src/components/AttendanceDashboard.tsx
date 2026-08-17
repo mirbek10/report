@@ -47,33 +47,33 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
     return [...absentList, ...presentList];
   }, [filterTab, presentList, absentList]);
 
-  const handleArrive = useCallback((studentId: string, time_start: string, time_finish: string, lesson_type: LessonType) => {
+  const handleArrive = useCallback(async (studentId: string, time_start: string, time_finish: string, lesson_type: LessonType) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
     const entry: ComeEntry = { date: selectedDate, time_start, time_finish, lesson_type };
-    markCome.mutate({ student, date: selectedDate, entry });
+    await markCome.mutateAsync({ student, date: selectedDate, entry });
   }, [students, selectedDate, markCome]);
 
-  const handleUnmark = useCallback((studentId: string) => {
+  const handleUnmark = useCallback(async (studentId: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
-    unmarkCome.mutate({ student, date: selectedDate });
+    await unmarkCome.mutateAsync({ student, date: selectedDate });
   }, [students, selectedDate, unmarkCome]);
 
-  const handleTimeEdit = useCallback((studentId: string, field: 'time_start' | 'time_finish', value: string) => {
+  const handleTimeEdit = useCallback(async (studentId: string, field: 'time_start' | 'time_finish', value: string) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
-    updateComeTime.mutate({ student, date: selectedDate, patch: { [field]: value } });
+    await updateComeTime.mutateAsync({ student, date: selectedDate, patch: { [field]: value } });
   }, [students, selectedDate, updateComeTime]);
 
-  const handleTopicChange = useCallback((studentId: string, topic: string) => {
-    editStudent.mutate({ id: studentId, updates: { currentTopic: topic } });
+  const handleTopicChange = useCallback(async (studentId: string, topic: string) => {
+    await editStudent.mutateAsync({ id: studentId, updates: { currentTopic: topic } });
   }, [editStudent]);
 
-  const handleLessonTypeChange = useCallback((studentId: string, lesson_type: LessonType) => {
+  const handleLessonTypeChange = useCallback(async (studentId: string, lesson_type: LessonType) => {
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
-    updateComeTime.mutate({ student, date: selectedDate, patch: { lesson_type } });
+    await updateComeTime.mutateAsync({ student, date: selectedDate, patch: { lesson_type } });
   }, [students, selectedDate, updateComeTime]);
 
   const handleRenameGroup = useCallback(async (oldName: string, newName: string) => {
