@@ -160,7 +160,7 @@ export function generateDailyReport(
   students: Student[],
   date: string,
   mentorName = 'Ментор',
-  defaultGroup = ''
+  defaultGroups: string[] = [],
 ): string {
   const dateObj = parseDMY(date);
   const KG_MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
@@ -175,9 +175,9 @@ export function generateDailyReport(
   const totalOnline = present.filter((x) => x.entry.lesson_type === 'online').length;
   const totalOffline = present.filter((x) => x.entry.lesson_type === 'offline').length;
 
-  // Total students — from default group if set, otherwise all
-  const countSource = defaultGroup
-    ? students.filter((s) => (s.groupName || '') === defaultGroup)
+  // Total students — from default groups if set, otherwise all
+  const countSource = defaultGroups.length > 0
+    ? students.filter((s) => defaultGroups.includes(s.groupName || ''))
     : students;
 
   // Groups that have at least one present student today
@@ -189,11 +189,11 @@ export function generateDailyReport(
     `📋 Күнүмдүк отчёт`,
     ``,
     `👤 Башкаруучу ментор: ${mentorName}`,
-    `📅 Күнү: ${kyrgyzDate}`,
+    `📅 Күн: ${kyrgyzDate}`,
     ``,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `📊 Жалпы маалымат:`,
-    `   Жалпы студенттердин саны: ${countSource.length} студент${defaultGroup ? ` (${defaultGroup})` : ''}`,
+    `   Жалпы студенттердин саны: ${countSource.length} студент${defaultGroups.length > 0 ? ` (${defaultGroups.join(', ')})` : ''}`,
     `   Бүгүн келген: ${present.length} студент`,
     `   ├─ 📍 Оффлайн: ${totalOffline}`,
     `   └─ 🌐 Онлайн: ${totalOnline}`,
@@ -207,7 +207,7 @@ export function generateDailyReport(
       const gPresent = present.filter((x) => (x.student.groupName || 'Жалпы') === group);
       const gOnline = gPresent.filter((x) => x.entry.lesson_type === 'online').length;
       const gOffline = gPresent.filter((x) => x.entry.lesson_type === 'offline').length;
-      const isDefault = defaultGroup && group === defaultGroup;
+      const isDefault = defaultGroups.includes(group);
 
       lines.push(``);
       lines.push(`📌 ${group}${isDefault ? ' ⭐' : ''}`);
@@ -215,11 +215,11 @@ export function generateDailyReport(
       gPresent.forEach(({ student, entry }, i) => {
         const icon = entry.lesson_type === 'online' ? '🌐' : '📍';
         const branch = i === gPresent.length - 1 ? '└─' : '├─';
-        lines.push(`   ${branch} ${i + 1}. ${student.name} ${icon} ${entry.time_start}–${entry.time_finish}`);
+        const topic = student.currentTopic?.trim() || 'Тема не выбрана';
+        lines.push(`   ${branch} ${i + 1}. ${student.name} — ${topic} ${icon} ${entry.time_start}–${entry.time_finish}`);
       });
     }
   }
-
   lines.push(``, `━━━━━━━━━━━━━━━━━━━━━━`);
   lines.push(`✅ Жыйынтык: ${present.length} сабак өткөрүлдү (📍 ${totalOffline} оффлайн, 🌐 ${totalOnline} онлайн)`);
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Copy, FileText, Check } from 'lucide-react';
 import { clsx } from 'clsx';
 import { copyToClipboard, generateDailyReport } from '../utils/analytics';
-import { getDefaultGroup } from './GroupPicker';
+import { getDefaultGroups } from './GroupPicker';
 import type { Student } from '../types';
 
 interface CopyButtonsProps {
@@ -40,7 +40,7 @@ export function CopyButtons({ students, date, mentorName = 'Ментор' }: Cop
 
   // Report copy: full Kyrgyz report with default group highlight
   const handleCopyReport = async () => {
-    const text = generateDailyReport(students, date, mentorName, getDefaultGroup());
+    const text = generateDailyReport(students, date, mentorName, getDefaultGroups());
     await copyToClipboard(text);
     setCopiedReport(true);
     setTimeout(() => setCopiedReport(false), 2000);

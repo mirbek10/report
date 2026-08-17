@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 import * as XLSX from 'xlsx';
 import { useStudents } from '../hooks/useStudents';
 import { TopicPicker } from './TopicPicker';
-import { GroupPicker, getAllGroups, getDefaultGroup } from './GroupPicker';
+import { GroupPicker, getAllGroups, getDefaultGroups } from './GroupPicker';
 import { StudentFormModal } from './StudentFormModal';
 import { GroupManagerModal } from './GroupManagerModal';
 import type { Student } from '../types';
@@ -45,7 +45,7 @@ function studentToRow(s: Student): Row {
 }
 
 function emptyRow(groupName?: string): Row {
-  return { key: newKey(), name: '', groupName: groupName ?? getDefaultGroup(), currentTopic: DEFAULT_TOPIC, dirty: false, saving: false, error: false };
+  return { key: newKey(), name: '', groupName: groupName ?? getDefaultGroups()[0], currentTopic: DEFAULT_TOPIC, dirty: false, saving: false, error: false };
 }
 
 /** Clean a name cell: remove ✅, trailing dashes, extra spaces */
@@ -71,7 +71,7 @@ function parseXlsx(file: File): Promise<XlsxPreviewRow[]> {
           .map((row) => ({
             name: cleanName(row[0]),
             phone: row[1] != null ? String(row[1]).trim() : '',
-            groupName: getDefaultGroup(),
+            groupName: getDefaultGroups()[0],
             currentTopic: DEFAULT_TOPIC,
             selected: true,
           }))
@@ -152,7 +152,7 @@ function XlsxImportModal({ rows, existingNames, onClose, onConfirm, isSaving, pr
   const [preview, setPreview] = useState<XlsxPreviewRow[]>(() =>
     rows.map((r) => ({ ...r, selected: !existingNames.has(r.name.toLowerCase()) }))
   );
-  const [groupAll, setGroupAll] = useState(() => getDefaultGroup());
+  const [groupAll, setGroupAll] = useState(() => getDefaultGroups()[0]);
   const [topicAll, setTopicAll] = useState(DEFAULT_TOPIC);
   const [groupOptions] = useState<string[]>(getAllGroups);
 
@@ -354,7 +354,7 @@ export function StudentsEditor() {
   }, [editStudent, addStudent, updateRow]);
 
   const addRow = useCallback(() => {
-    const lastGroup = rows.at(-1)?.groupName ?? getDefaultGroup();
+    const lastGroup = rows.at(-1)?.groupName ?? getDefaultGroups()[0];
     const row = emptyRow(lastGroup);
     setRows((prev) => [...prev, row]);
     setTimeout(() => inputRefs.current.get(row.key)?.focus(), 30);
@@ -382,7 +382,7 @@ export function StudentsEditor() {
   const handleBulkSave = useCallback(async () => {
     const names = bulkText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
     if (names.length === 0) return;
-    const lastGroup = rows.find((r) => r.id)?.groupName ?? getDefaultGroup();
+    const lastGroup = rows.find((r) => r.id)?.groupName ?? getDefaultGroups()[0];
     setBulkSaving(true);
     try {
       const res = await batchAddStudents.mutateAsync(names.map((name) => ({ name, groupName: lastGroup, currentTopic: DEFAULT_TOPIC, come: [] })));
@@ -480,7 +480,7 @@ export function StudentsEditor() {
         <div className="flex gap-2 flex-wrap w-full sm:w-auto">
           {/* Add Student Button (Mobile only) */}
           <button 
-            onClick={() => setEditingStudent({ name: '', groupName: rows.at(-1)?.groupName || getDefaultGroup(), currentTopic: DEFAULT_TOPIC, key: '' })}
+            onClick={() => setEditingStudent({ name: '', groupName: rows.at(-1)?.groupName || getDefaultGroups()[0], currentTopic: DEFAULT_TOPIC, key: '' })}
             className="flex-1 sm:hidden flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-650 hover:bg-indigo-600 text-white shadow-md transition-all"
           >
             <Plus size={13} />
