@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
-  Search, CheckCheck, Loader2, AlertTriangle, RefreshCw,
+  Search, Loader2, AlertTriangle, RefreshCw,
   ClipboardList, Users, Wifi, WifiOff, Settings,
   Check, X, BarChart2,
 } from 'lucide-react';
@@ -8,7 +8,7 @@ import { clsx } from 'clsx';
 import { useStudents } from '../hooks/useStudents';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useMentorName } from '../hooks/useMentorName';
-import { todayDMY, nowHHMM, addMinutes } from '../utils/dates';
+import { todayDMY } from '../utils/dates';
 import { DateBar } from './DateBar';
 import { StudentRow } from './StudentRow';
 import { StatsBar } from './StatsBar';
@@ -88,18 +88,6 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
     }
   }, [students, editStudent]);
 
-  const handleMarkAllPresent = useCallback(async () => {
-    if (absentList.length === 0) return;
-    const now = nowHHMM();
-    const finish = addMinutes(now, 30);
-    for (let i = 0; i < absentList.length; i += 5) {
-      await Promise.all(absentList.slice(i, i + 5).map((s) =>
-        markCome.mutateAsync({ student: s, date: selectedDate, entry: { date: selectedDate, time_start: now, time_finish: finish, lesson_type: 'offline' } })
-      ));
-      if (i + 5 < absentList.length) await new Promise((r) => setTimeout(r, 300));
-    }
-  }, [absentList, selectedDate, markCome]);
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Header */}
@@ -147,15 +135,17 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 <input type="text" placeholder="Поиск по имени..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-650 placeholder-slate-500" />
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl pl-9 pr-9 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-650 placeholder-slate-500" />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                <button onClick={handleMarkAllPresent}
-                  disabled={absentList.length === 0 || markCome.isPending}
-                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-705 hover:bg-emerald-600 disabled:bg-slate-900/60 disabled:border-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white transition-all whitespace-nowrap border border-transparent">
-                  {markCome.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCheck size={15} />}
-                  <span>{markCome.isPending ? 'Отмечаем...' : `Все пришли (${absentList.length})`}</span>
-                </button>
                 <button onClick={() => refetch()}
                   title="Обновить"
                   className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850 transition-colors">
@@ -212,7 +202,7 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
                 {filterTab === 'absent' && (
                   <>
                     <div className="w-10 h-10 rounded-xl bg-emerald-950/60 border border-emerald-900/50 flex items-center justify-center">
-                      <CheckCheck size={18} className="text-emerald-500" />
+                      <Check size={18} className="text-emerald-500" />
                     </div>
                     <p className="text-emerald-400 font-medium text-sm">Все студенты отмечены!</p>
                     <p className="text-slate-500 text-xs">На {selectedDate} нет непроверенных</p>
