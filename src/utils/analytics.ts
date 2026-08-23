@@ -163,8 +163,10 @@ export function generateDailyReport(
   defaultGroups: string[] = [],
 ): string {
   const dateObj = parseDMY(date);
-  const KG_MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-  const kyrgyzDate = `${dateObj.getDate()}-${KG_MONTHS[dateObj.getMonth()]}, ${dateObj.getFullYear()}-жыл`;
+  const KG_MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+  const RU_WEEKDAYS = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  const weekday = RU_WEEKDAYS[dateObj.getDay()];
+  const kyrgyzDate = `${dateObj.getDate()}-${KG_MONTHS[dateObj.getMonth()]}, ${dateObj.getFullYear()}-жыл (${weekday})`;
 
   // All present entries for this date, sorted by time
   const present = students

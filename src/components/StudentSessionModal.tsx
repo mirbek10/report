@@ -13,7 +13,7 @@ interface StudentSessionModalProps {
   onTopicChange: (topic: string) => Promise<void> | void;
 }
 
-const DEFAULT_DURATION = 30;
+const DEFAULT_DURATION = 40;
 
 export function StudentSessionModal({
   student,
@@ -58,7 +58,15 @@ export function StudentSessionModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-visible transform transition-all scale-95 duration-200">
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-visible transform transition-all scale-95 duration-200"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey && !(e.target instanceof HTMLInputElement && e.target.type === 'time')) {
+            e.preventDefault();
+            handleSave();
+          }
+        }}
+      >
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">

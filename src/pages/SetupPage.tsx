@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiSetup } from '../components/ApiSetup';
-import { setApiClient } from '../api/client';
+import { setApiClient, getStoredApiUrl } from '../api/client';
 
 export function SetupPage() {
   const navigate = useNavigate();
@@ -13,5 +13,14 @@ export function SetupPage() {
     navigate('/dashboard');
   };
 
-  return <ApiSetup onConfirm={handleConfirm} />;
+  const handleCancel = () => {
+    navigate('/dashboard');
+  };
+
+  return (
+    <ApiSetup
+      onConfirm={handleConfirm}
+      onCancel={getStoredApiUrl() ? handleCancel : undefined}
+    />
+  );
 }

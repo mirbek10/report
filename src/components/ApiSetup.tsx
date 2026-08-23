@@ -1,23 +1,22 @@
 import { useState } from 'react';
 import { Link2, Loader2, CheckCircle2, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
-import { setApiClient } from '../api/client';
+import { setApiClient, getStoredApiUrl } from '../api/client';
 import { fetchAllStudents } from '../api/students';
 
 interface ApiSetupProps {
   onConfirm: (baseUrl: string) => void;
+  onCancel?: () => void;
 }
 
 type TestState = 'idle' | 'loading' | 'ok' | 'error';
 
-export function ApiSetup({ onConfirm }: ApiSetupProps) {
-  const [url, setUrl] = useState('');
+export function ApiSetup({ onConfirm, onCancel }: ApiSetupProps) {
+  const [url, setUrl] = useState(() => getStoredApiUrl());
   const [testState, setTestState] = useState<TestState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [showGuide, setShowGuide] = useState(false);
+  const existingUrl = getStoredApiUrl();
 
-  // Normalise URL: trim, remove trailing slash
-  // MockAPI base URL should look like https://abc123.mockapi.io
-  // NOT https://abc123.mockapi.io/api or /check — resources are appended by the app
   const normalise = (raw: string) =>
     raw.trim().replace(/\/+$/, '').replace(/\/(api|check)\/?$/, '');
 
@@ -33,7 +32,7 @@ export function ApiSetup({ onConfirm }: ApiSetupProps) {
       await fetchAllStudents();
       setTestState('ok');
     } catch (e: unknown) {
-      setApiClient('');
+      // Don't reset the client — keep whatever was stored before
       setTestState('error');
       if (e && typeof e === 'object' && 'response' in e) {
         const resp = (e as { response?: { status?: number } }).response;
@@ -73,9 +72,19 @@ export function ApiSetup({ onConfirm }: ApiSetupProps) {
 
         {/* Main card */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-          <div className="flex items-center gap-2 mb-1">
-            <Link2 size={16} className="text-indigo-400" />
-            <h2 className="text-lg font-semibold text-slate-100">Подключение к MockAPI</h2>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <Link2 size={16} className="text-indigo-400" />
+              <h2 className="text-lg font-semibold text-slate-100">Подключение к MockAPI</h2>
+            </div>
+            {existingUrl && onCancel && (
+              <button
+                onClick={onCancel}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-2 py-1 rounded-lg hover:bg-slate-800"
+              >
+                ← Назад
+              </button>
+            )}
           </div>
           <p className="text-slate-400 text-sm mb-6">
             Вставьте Base URL вашего проекта на MockAPI. Данные будут храниться только в вашем аккаунте.
@@ -140,7 +149,7 @@ export function ApiSetup({ onConfirm }: ApiSetupProps) {
               disabled={!isValidUrl || testState === 'loading'}
               className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-colors text-sm"
             >
-              Войти →
+              {existingUrl ? 'Сохранить' : 'Войти →'}
             </button>
           </div>
 
