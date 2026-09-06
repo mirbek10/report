@@ -64,23 +64,29 @@ function generatePeriodReport(students: Student[], dates: string[], label: strin
     .map((s) => ({ student: s, entries: s.come.filter((e) => dateSet.has(e.date)) }))
     .filter((x) => x.entries.length > 0)
     .sort((a, b) => b.entries.length - a.entries.length);
+  const absent = students.length - visited.length;
   const total = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date)).length, 0);
   const online = students.reduce((s, st) => s + st.come.filter((e) => dateSet.has(e.date) && e.lesson_type === 'online').length, 0);
   const offline = total - online;
-  return [
+  const lines = [
     `Мезгил: ${label}`,
-    `Жалпы студент: ${students.length}`,
-    `Жалпы келген: ${visited.length} уникалдуу студент`,
-    `Жалпы сабак: ${total} (📍 ${offline} оффлайн, 🌐 ${online} онлайн)`,
-    ``,
-    `Активдүү студенттер:`,
-    ...visited.map(({ student, entries }, i) => {
+    `Жалпы студент саны: ${students.length}`,
+    `Катышкан студент: ${visited.length}`,
+    `Катышпаган студент: ${absent}`,
+    `Жалпы сабак саны: ${total} (оффлайн: ${offline}, онлайн: ${online})`,
+  ];
+  if (visited.length > 0) {
+    lines.push(``, `Катышкан студенттер:`);
+    visited.forEach(({ student, entries }, i) => {
       const on = entries.filter((e) => e.lesson_type === 'online').length;
       const off = entries.length - on;
-      const detail = [off > 0 && `📍${off}`, on > 0 && `🌐${on}`].filter(Boolean).join(' ');
-      return `${i + 1}. ${student.name} — ${entries.length} жолу (${detail})`;
-    }),
-  ].join('\n');
+      const detail = [off > 0 && `оффлайн: ${off}`, on > 0 && `онлайн: ${on}`].filter(Boolean).join(', ');
+      lines.push(`${i + 1}. ${student.name} — ${entries.length} жолу (${detail})`);
+    });
+  } else {
+    lines.push(``, `Бул мезгилде эч ким катышкан жок.`);
+  }
+  return lines.join('\n');
 }
 
 function generateMonthlyAllGroupsReport(students: Student[], dates: string[], label: string): string {

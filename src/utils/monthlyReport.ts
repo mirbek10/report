@@ -131,43 +131,49 @@ export function buildMonthlyReportData(
 
 export function buildMonthlyReportText(data: MonthlyReportData): string {
   const lines: string[] = [
-    `Ментор (${data.mentorName})`,
-    line('Бардыгы студент', data.totalStudents),
-    line('Бардыгы катышты', data.totalVisits),
-    line('Бардыгы онлайн', data.onlineVisits),
-    line('Бардыгы оффлайн', data.offlineVisits),
-    blank(),
-    'Окуп жаткандар:',
-    blank(),
-    'Замарозка:',
-    blank(),
-    'Окубай жаткандар:',
-    blank(),
-    blank(),
-    'Эмне үчүн окубай жатат:',
-    blank(),
-    blank(),
-    blank(),
-    'Бир айда оффлайнга келгендердин саны:',
+    `Айлык отчёт`,
+    `Ментор: ${data.mentorName}`,
+    `Мезгил: ${data.periodLabel}`,
+    ``,
+    `Жалпы студент саны: ${data.totalStudents}`,
+    `Катышкан студент: ${data.visitedStudents}`,
+    `Жалпы сабак саны: ${data.totalVisits}`,
+    `Оффлайн: ${data.offlineVisits}, онлайн: ${data.onlineVisits}`,
+    ``,
+    `Топтор боюнча:`,
   ];
 
   for (const group of data.groups) {
-    lines.push(`${group.name}: онлайн ${group.onlineVisits}, оффлайн ${group.offlineVisits}, бардыгы ${group.totalVisits}`);
+    lines.push(`${group.name}: жалпы — ${group.totalVisits}, оффлайн — ${group.offlineVisits}, онлайн — ${group.onlineVisits}`);
   }
 
   lines.push(
-    blank(),
-    'Бир айда канча түз эфир өткөрүлдү жана кахутка/болжол менен канча студент катышты:',
-    blank(),
-    blank(),
-    'Бир жумада 2 жолу түз эфир болот. Шейшемби жана бейшемби күндөрү. Кахут ишемби күнү болот',
-    blank(),
-    blank(),
-    'Андан тышкары бир ай ичинде топторго кандай жаңылыктар киргизилди:',
-    blank(),
-    blank(),
-    'Бир айда хакатон жана челлендж өткөрүлдү:',
-    'челленджге ____ / хакатонго ____ студент катышты',
+    ``,
+    `Окуп жаткандар:`,
+    ``,
+    `Замарозка:`,
+    ``,
+    `Окубай жаткандар:`,
+    ``,
+    `Эмне үчүн окубай жатат:`,
+    ``,
+    `Бир айда оффлайнга келгендер (топтор боюнча):`,
+  );
+
+  for (const group of data.groups) {
+    lines.push(`${group.name}: оффлайн — ${group.offlineVisits}`);
+  }
+
+  lines.push(
+    ``,
+    `Бир айда канча түз эфир өткөрүлдү жана болжол менен канча студент катышты:`,
+    ``,
+    `Бир жумада 2 жолу түз эфир болот — шейшемби жана бейшемби күндөрү. Кахут ишемби күнү болот.`,
+    ``,
+    `Бир ай ичинде топторго кандай жаңылыктар киргизилди:`,
+    ``,
+    `Бир айда хакатон жана челлендж өткөрүлдү:`,
+    `Челленджге ____ / хакатонго ____ студент катышты`,
   );
 
   return lines.join('\n');
@@ -197,24 +203,33 @@ export async function buildMonthlyReportBlob(data: MonthlyReportData): Promise<B
         children: [
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `Ментор (${data.mentorName})`, bold: true, size: 30, color: '111827' })],
-            spacing: { after: 140 },
+            children: [new TextRun({ text: `Айлык отчёт — ${data.mentorName}`, bold: true, size: 30, color: '111827' })],
+            spacing: { after: 80 },
           }),
           new Paragraph({
-            children: [new TextRun({ text: line('Бардыгы студент', data.totalStudents), size: 22 })],
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: data.periodLabel, size: 22, color: '6B7280' })],
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: line('Жалпы студент саны', data.totalStudents), size: 22 })],
             spacing: { after: 40 },
           }),
           new Paragraph({
-            children: [new TextRun({ text: line('Бардыгы катышты', data.totalVisits), size: 22 })],
+            children: [new TextRun({ text: line('Катышкан студент', data.visitedStudents), size: 22 })],
             spacing: { after: 40 },
           }),
           new Paragraph({
-            children: [new TextRun({ text: line('Бардыгы онлайн', data.onlineVisits), size: 22 })],
+            children: [new TextRun({ text: line('Жалпы сабак саны', data.totalVisits), size: 22 })],
             spacing: { after: 40 },
           }),
           new Paragraph({
-            children: [new TextRun({ text: line('Бардыгы оффлайн', data.offlineVisits), size: 22 })],
-            spacing: { after: 140 },
+            children: [new TextRun({ text: line('Онлайн', data.onlineVisits), size: 22 })],
+            spacing: { after: 40 },
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: line('Оффлайн', data.offlineVisits), size: 22 })],
+            spacing: { after: 160 },
           }),
           new Paragraph({
             children: [new TextRun({ text: 'Окуп жаткандар:', bold: true, size: 22 })],
@@ -235,44 +250,44 @@ export async function buildMonthlyReportBlob(data: MonthlyReportData): Promise<B
             children: [new TextRun({ text: 'Эмне үчүн окубай жатат:', bold: true, size: 22 })],
             spacing: { after: 40 },
           }),
-          new Paragraph({ children: [new TextRun({ text: '______________________________', size: 22 })], spacing: { after: 150 } }),
+          new Paragraph({ children: [new TextRun({ text: '______________________________', size: 22 })], spacing: { after: 160 } }),
           new Paragraph({
-            children: [new TextRun({ text: 'Бир айда оффлайнга келгендердин саны:', bold: true, size: 22 })],
-            spacing: { after: 60 },
+            children: [new TextRun({ text: 'Бир айда оффлайнга келгендердин саны (топтор боюнча):', bold: true, size: 22 })],
+            spacing: { after: 80 },
           }),
           makeTable([
             new TableRow({
               children: [
-                makeCell('Группа', true),
+                makeCell('Топ', true),
                 makeCell('Онлайн', true, AlignmentType.CENTER),
                 makeCell('Оффлайн', true, AlignmentType.CENTER),
-                makeCell('Бардыгы', true, AlignmentType.CENTER),
+                makeCell('Жалпы', true, AlignmentType.CENTER),
               ],
             }),
             ...rows,
           ]),
           new Paragraph({ children: [new TextRun({ text: '', size: 10 })], spacing: { after: 120 } }),
           new Paragraph({
-            children: [new TextRun({ text: 'Бир айда канча түз эфир өткөрүлдү жана кахутка/болжол менен канча студент катышты:', bold: true, size: 22 })],
+            children: [new TextRun({ text: 'Бир айда канча түз эфир өткөрүлдү жана болжол менен канча студент катышты:', bold: true, size: 22 })],
             spacing: { after: 40 },
           }),
-          new Paragraph({ children: [new TextRun({ text: '_________________________________________', size: 22 })], spacing: { after: 30 } }),
-          new Paragraph({ children: [new TextRun({ text: '_________________________________________', size: 22 })], spacing: { after: 150 } }),
+          new Paragraph({ children: [new TextRun({ text: '______________________________', size: 22 })], spacing: { after: 30 } }),
+          new Paragraph({ children: [new TextRun({ text: '______________________________', size: 22 })], spacing: { after: 120 } }),
           new Paragraph({
-            children: [new TextRun({ text: 'Бир жумада 2 жолу түз эфир болот. Шейшемби жана бейшемби күндөрү. Кахут ишемби күнү болот', size: 22 })],
-            spacing: { after: 150 },
+            children: [new TextRun({ text: 'Бир жумада 2 жолу түз эфир болот — шейшемби жана бейшемби күндөрү. Кахут ишемби күнү болот.', size: 22 })],
+            spacing: { after: 160 },
           }),
           new Paragraph({
-            children: [new TextRun({ text: 'Андан тышкары бир ай ичинде топторго кандай жаңылыктар киргизилди:', bold: true, size: 22 })],
+            children: [new TextRun({ text: 'Бир ай ичинде топторго кандай жаңылыктар киргизилди:', bold: true, size: 22 })],
             spacing: { after: 40 },
           }),
-          new Paragraph({ children: [new TextRun({ text: '_________________________________________', size: 22 })], spacing: { after: 30 } }),
-          new Paragraph({ children: [new TextRun({ text: '_________________________________________', size: 22 })], spacing: { after: 150 } }),
+          new Paragraph({ children: [new TextRun({ text: '______________________________', size: 22 })], spacing: { after: 30 } }),
+          new Paragraph({ children: [new TextRun({ text: '______________________________', size: 22 })], spacing: { after: 160 } }),
           new Paragraph({
             children: [new TextRun({ text: 'Бир айда хакатон жана челлендж өткөрүлдү:', bold: true, size: 22 })],
             spacing: { after: 40 },
           }),
-          new Paragraph({ children: [new TextRun({ text: 'челленджге ____ / хакатонго ____ студент катышты', size: 22 })], spacing: { after: 40 } }),
+          new Paragraph({ children: [new TextRun({ text: 'Челленджге ____ / хакатонго ____ студент катышты', size: 22 })], spacing: { after: 40 } }),
         ],
       },
     ],

@@ -37,9 +37,17 @@ export function StudentFormModal({
     onClose();
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-visible transform transition-all scale-95 duration-200">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-visible"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
@@ -112,6 +120,7 @@ export function StudentFormModal({
         <div className="px-5 py-4 border-t border-slate-800 flex items-center gap-3 bg-slate-900/60 rounded-b-2xl">
           {isEditing && onDelete && (
             <button
+              type="button"
               onClick={() => {
                 if (window.confirm(`Вы уверены, что хотите удалить студента ${name}?`)) {
                   onDelete();
@@ -134,8 +143,7 @@ export function StudentFormModal({
               Отмена
             </button>
             <button
-              type="button"
-              onClick={handleSave}
+              type="submit"
               className="flex items-center justify-center gap-1.5 px-5 py-2.5 bg-indigo-650 hover:bg-indigo-600 text-white text-sm font-semibold rounded-xl transition-all shadow-lg hover:shadow-indigo-500/10"
             >
               {isEditing ? 'Сохранить' : 'Добавить'}
@@ -143,7 +151,7 @@ export function StudentFormModal({
           </div>
         </div>
 
-      </div>
+      </form>
     </div>
   );
 }

@@ -478,10 +478,10 @@ export function StudentsEditor() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap w-full sm:w-auto">
-          {/* Add Student Button (Mobile only) */}
-          <button 
+          {/* Add Student Button (all devices) */}
+          <button
             onClick={() => setEditingStudent({ name: '', groupName: rows.at(-1)?.groupName || getDefaultGroups()[0], currentTopic: DEFAULT_TOPIC, key: '' })}
-            className="flex-1 sm:hidden flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-650 hover:bg-indigo-600 text-white shadow-md transition-all"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-650 hover:bg-indigo-600 text-white shadow-md transition-all"
           >
             <Plus size={13} />
             Добавить
@@ -523,12 +523,6 @@ export function StudentsEditor() {
               showBulk ? 'bg-indigo-950/40 border-indigo-700/60 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-350 hover:text-white')}>
             <Upload size={13} />
             Вставить список
-          </button>
-          {/* Add Row Button (Desktop only) */}
-          <button onClick={addRow}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-350 hover:text-white transition-colors">
-            <Plus size={13} />
-            Строка
           </button>
         </div>
       </div>
