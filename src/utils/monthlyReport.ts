@@ -20,7 +20,7 @@ export interface MonthlyReportGroup {
   onlineVisits: number;
   offlineVisits: number;
 }
-
+ 
 export interface MonthlyReportData {
   mentorName: string;
   periodLabel: string;
