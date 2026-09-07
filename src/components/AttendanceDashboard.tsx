@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import {
   Search, Loader2, AlertTriangle, RefreshCw,
   ClipboardList, Users, Wifi, WifiOff, Settings,
-  Check, X, BarChart2,
+  Check, X, BarChart2, Sheet,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useStudents } from '../hooks/useStudents';
@@ -15,6 +15,8 @@ import { StatsBar } from './StatsBar';
 import { StudentsEditor } from './StudentsEditor';
 import { CopyButtons } from './CopyButtons';
 import { ReportsContent } from './ReportsContent';
+import { SheetsSetupModal } from './SheetsSetupModal';
+import { getSheetsUrl, syncDayToSheets } from '../utils/sheetsSync';
 import type { ComeEntry, LessonType } from '../types';
 
 interface Props { onChangeApi: () => void; }
@@ -28,6 +30,9 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
   const [search, setSearch] = useState('');
   const isOnline = useOnlineStatus();
   const [mentorName, setMentorName] = useMentorName();
+  const [showSheetsModal, setShowSheetsModal] = useState(false);
+  const [sheetsSyncing, setSheetsSyncing] = useState(false);
+  const [sheetsSyncOk, setSheetsSyncOk] = useState(false);
 
   const { data: students = [], isLoading, isError, refetch, editStudent, markCome, unmarkCome, updateComeTime } = useStudents();
 
@@ -88,6 +93,19 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
     }
   }, [students, editStudent]);
 
+  const handleSyncDay = useCallback(async () => {
+    const url = getSheetsUrl();
+    if (!url) { setShowSheetsModal(true); return; }
+    setSheetsSyncing(true);
+    setSheetsSyncOk(false);
+    const result = await syncDayToSheets(students, selectedDate, url);
+    setSheetsSyncing(false);
+    if (result.ok) {
+      setSheetsSyncOk(true);
+      setTimeout(() => setSheetsSyncOk(false), 3000);
+    }
+  }, [students, selectedDate]);
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Header */}
@@ -108,6 +126,17 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
           {!isOnline
             ? <div className="flex items-center gap-1.5 text-amber-400 text-xs bg-amber-950/50 border border-amber-800/50 px-2.5 py-1 rounded-full"><WifiOff size={12} /><span className="hidden sm:inline">Офлайн</span></div>
             : <Wifi size={13} className="text-emerald-500" />}
+          <button
+            onClick={() => setShowSheetsModal(true)}
+            title="Синхронизировать с Google Sheets"
+            className="p-2 text-slate-500 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors relative"
+          >
+            {sheetsSyncing
+              ? <Loader2 size={15} className="animate-spin text-emerald-400" />
+              : sheetsSyncOk
+                ? <Check size={15} className="text-emerald-400" />
+                : <Sheet size={15} className={getSheetsUrl() ? 'text-emerald-600' : ''} />}
+          </button>
           <button onClick={onChangeApi} className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title="Изменить API">
             <Settings size={15} />
           </button>
@@ -187,6 +216,49 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
 
             {visibleStudents.length > 0 && (
               <div className="flex flex-col gap-1.5 pb-8">
+                {/* Present summary table — shown when filter is 'present' or 'all' and someone is marked */}
+                {(filterTab === 'present' || filterTab === 'all') && presentList.length > 0 && (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mb-1">
+                    <div className="px-4 py-2.5 border-b border-slate-800 flex items-center gap-2">
+                      <Check size={13} className="text-emerald-400 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-slate-200">Пришли сегодня</span>
+                      <span className="ml-auto text-xs text-slate-500 font-mono">{presentList.length} чел.</span>
+                    </div>
+                    <div className="divide-y divide-slate-800/70">
+                      {[...presentList]
+                        .sort((a, b) => {
+                          const ta = a.come.find((e) => e.date === selectedDate)?.time_start ?? '';
+                          const tb = b.come.find((e) => e.date === selectedDate)?.time_start ?? '';
+                          return ta.localeCompare(tb);
+                        })
+                        .map((student, i) => {
+                          const entry = student.come.find((e) => e.date === selectedDate);
+                          return (
+                            <div key={student.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors">
+                              <span className="text-xs text-slate-600 font-mono w-5 text-right flex-shrink-0">{i + 1}</span>
+                              <span className="flex-1 text-sm text-slate-200 font-medium truncate">{student.name}</span>
+                              {entry && (
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className={clsx(
+                                    'text-xs font-mono font-semibold px-2 py-0.5 rounded-lg',
+                                    entry.lesson_type === 'online'
+                                      ? 'bg-sky-950/60 text-sky-300'
+                                      : 'bg-emerald-950/60 text-emerald-300'
+                                  )}>
+                                    {entry.time_start}
+                                  </span>
+                                  <span className="text-slate-600 text-xs">—</span>
+                                  <span className="text-xs font-mono text-slate-400 px-2 py-0.5 bg-slate-800/60 rounded-lg">
+                                    {entry.time_finish}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
                 {visibleStudents.map((student, idx) => (
                   <StudentRow key={student.id} student={student} index={idx}
                     come={student.come.find((e) => e.date === selectedDate)}
@@ -218,6 +290,10 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
         {mainTab === 'students' && <StudentsEditor />}
         {mainTab === 'reports' && <ReportsContent students={students} mentorName={mentorName || 'Ментор'} onRenameGroup={handleRenameGroup} />}
       </main>
+
+      {showSheetsModal && (
+        <SheetsSetupModal students={students} selectedDate={selectedDate} onClose={() => setShowSheetsModal(false)} />
+      )}
     </div>
   );
 }

@@ -100,6 +100,16 @@ export function StudentRow({
           <p className="text-xs text-slate-500 truncate sm:hidden mt-0.5">
             Тема: {student.currentTopic || 'Не выбрана'}
           </p>
+          {/* Time — visible on mobile when present */}
+          {come && (
+            <p className="text-xs font-mono mt-0.5 sm:hidden">
+              <span className={come.lesson_type === 'online' ? 'text-sky-400' : 'text-emerald-400'}>
+                {come.time_start}
+              </span>
+              <span className="text-slate-600 mx-1">—</span>
+              <span className="text-slate-400">{come.time_finish}</span>
+            </p>
+          )}
         </div>
 
         {/* Time inputs when present (Desktop only) */}

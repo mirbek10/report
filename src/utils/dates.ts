@@ -33,10 +33,10 @@ export function addMinutes(hhmm: string, mins: number): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
-/** Remove come[] entries older than 2 months */
+/** Remove come[] entries older than 12 months */
 export function pruneOldEntries(come: import('../types').ComeEntry[]): import('../types').ComeEntry[] {
   const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - 2);
+  cutoff.setMonth(cutoff.getMonth() - 12);
   return come.filter((e) => parseDMY(e.date) >= cutoff);
 }
 
