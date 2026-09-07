@@ -16,6 +16,7 @@ import { StudentsEditor } from './StudentsEditor';
 import { CopyButtons } from './CopyButtons';
 import { ReportsContent } from './ReportsContent';
 import { SheetsSetupModal } from './SheetsSetupModal';
+import { DayEventsBar } from './DayEventsBar';
 import { getSheetsUrl } from '../utils/sheetsSync';
 import type { ComeEntry, LessonType } from '../types';
 
@@ -139,6 +140,7 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
           <>
             <DateBar selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setSearch(''); }} />
             {students.length > 0 && <StatsBar students={students} date={selectedDate} />}
+            <DayEventsBar date={selectedDate} />
 
             <div className="flex flex-col md:flex-row gap-3 w-full">
               <div className="relative flex-1">

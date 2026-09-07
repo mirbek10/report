@@ -161,6 +161,7 @@ export function generateDailyReport(
   date: string,
   mentorName = 'Ментор',
   defaultGroups: string[] = [],
+  dayEvents?: { live?: { time: string; participants: number }; kahoot?: { time: string; participants: number } },
 ): string {
   const dateObj = parseDMY(date);
   const KG_MONTHS = [
@@ -173,8 +174,7 @@ export function generateDailyReport(
 
   const present = students
     .map((s) => ({ student: s, entry: s.come.find((e) => e.date === date) }))
-    .filter((x): x is { student: Student; entry: ComeEntry } => !!x.entry)
-    .sort((a, b) => a.entry.time_start.localeCompare(b.entry.time_start));
+    .filter((x): x is { student: Student; entry: ComeEntry } => !!x.entry);
 
   const totalOnline = present.filter((x) => x.entry.lesson_type === 'online').length;
   const totalOffline = present.filter((x) => x.entry.lesson_type === 'offline').length;
@@ -182,8 +182,6 @@ export function generateDailyReport(
   const countSource = defaultGroups.length > 0
     ? students.filter((s) => defaultGroups.includes(s.groupName || ''))
     : students;
-
-  const activeGroupNames = [...new Set(present.map((x) => x.student.groupName || 'Негизги'))].sort();
 
   const lines: string[] = [
     `Ментор: ${mentorName}`,
@@ -194,19 +192,26 @@ export function generateDailyReport(
     `Оффлайн: ${totalOffline}, онлайн: ${totalOnline}`,
   ];
 
-  if (activeGroupNames.length > 0) {
+  // По группам — только цифры без списка студентов
+  const activeGroupNames = [...new Set(present.map((x) => x.student.groupName || 'Негизги'))].sort();
+  if (activeGroupNames.length > 1) {
+    lines.push(``);
     for (const group of activeGroupNames) {
       const gPresent = present.filter((x) => (x.student.groupName || 'Негизги') === group);
       const gOnline = gPresent.filter((x) => x.entry.lesson_type === 'online').length;
       const gOffline = gPresent.filter((x) => x.entry.lesson_type === 'offline').length;
-
-      lines.push(``);
       lines.push(`${group} — ${gPresent.length} студент (оффлайн: ${gOffline}, онлайн: ${gOnline})`);
-      gPresent.forEach(({ student, entry }, i) => {
-        const type = entry.lesson_type === 'online' ? 'онлайн' : 'оффлайн';
-        const topic = student.currentTopic?.trim() || '—';
-        lines.push(`${i + 1}. ${student.name} — ${topic} — ${entry.time_start}–${entry.time_finish} (${type})`);
-      });
+    }
+  }
+
+  // Прямой эфир и кахут
+  if (dayEvents?.live || dayEvents?.kahoot) {
+    lines.push(``);
+    if (dayEvents.live) {
+      lines.push(`Түз эфир: ${dayEvents.live.time} — ${dayEvents.live.participants} студент катышты`);
+    }
+    if (dayEvents.kahoot) {
+      lines.push(`Кахут: ${dayEvents.kahoot.time} — ${dayEvents.kahoot.participants} студент катышты`);
     }
   }
 
