@@ -32,10 +32,6 @@ export interface MonthlyReportData {
   groups: MonthlyReportGroup[];
 }
 
-function blank(): string {
-  return '';
-}
-
 function line(label: string, value: string | number | undefined | null): string {
   return `${label}: ${value ?? ''}`;
 }

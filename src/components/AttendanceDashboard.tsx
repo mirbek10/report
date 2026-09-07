@@ -16,7 +16,7 @@ import { StudentsEditor } from './StudentsEditor';
 import { CopyButtons } from './CopyButtons';
 import { ReportsContent } from './ReportsContent';
 import { SheetsSetupModal } from './SheetsSetupModal';
-import { getSheetsUrl, syncDayToSheets } from '../utils/sheetsSync';
+import { getSheetsUrl } from '../utils/sheetsSync';
 import type { ComeEntry, LessonType } from '../types';
 
 interface Props { onChangeApi: () => void; }
@@ -31,8 +31,6 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
   const isOnline = useOnlineStatus();
   const [mentorName, setMentorName] = useMentorName();
   const [showSheetsModal, setShowSheetsModal] = useState(false);
-  const [sheetsSyncing, setSheetsSyncing] = useState(false);
-  const [sheetsSyncOk, setSheetsSyncOk] = useState(false);
 
   const { data: students = [], isLoading, isError, refetch, editStudent, markCome, unmarkCome, updateComeTime } = useStudents();
 
@@ -93,19 +91,6 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
     }
   }, [students, editStudent]);
 
-  const handleSyncDay = useCallback(async () => {
-    const url = getSheetsUrl();
-    if (!url) { setShowSheetsModal(true); return; }
-    setSheetsSyncing(true);
-    setSheetsSyncOk(false);
-    const result = await syncDayToSheets(students, selectedDate, url);
-    setSheetsSyncing(false);
-    if (result.ok) {
-      setSheetsSyncOk(true);
-      setTimeout(() => setSheetsSyncOk(false), 3000);
-    }
-  }, [students, selectedDate]);
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Header */}
@@ -129,13 +114,9 @@ export function AttendanceDashboard({ onChangeApi }: Props) {
           <button
             onClick={() => setShowSheetsModal(true)}
             title="Синхронизировать с Google Sheets"
-            className="p-2 text-slate-500 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors relative"
+            className="p-2 text-slate-500 hover:text-emerald-400 hover:bg-slate-800 rounded-lg transition-colors"
           >
-            {sheetsSyncing
-              ? <Loader2 size={15} className="animate-spin text-emerald-400" />
-              : sheetsSyncOk
-                ? <Check size={15} className="text-emerald-400" />
-                : <Sheet size={15} className={getSheetsUrl() ? 'text-emerald-600' : ''} />}
+            <Sheet size={15} className={getSheetsUrl() ? 'text-emerald-600' : ''} />
           </button>
           <button onClick={onChangeApi} className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-lg transition-colors" title="Изменить API">
             <Settings size={15} />
